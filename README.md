@@ -1,10 +1,10 @@
 # OnlineFS
 
-OnlineFS is HIBLOW Philippines Inc.'s leave-filing and approval application. The current system is split across:
+OnlineFS is leave-filing and approval application. The current system is split across:
 
-- React/TypeScript/PWA frontend: `C:\Users\g.adorio\Documents\OnlineFS`
-- ASP.NET Core/EF Core/SQLite backend: `C:\Users\g.adorio\Documents\AutoID\src\AutoID`
-- Production SQLite database: `C:\Users\g.adorio\Documents\AutoID\src\AutoID\app.db`
+- React/TypeScript/PWA frontend: 
+- ASP.NET Core/EF Core/SQLite backend: 
+- Production SQLite database: 
 
 ## Capabilities
 
@@ -19,7 +19,6 @@ OnlineFS is HIBLOW Philippines Inc.'s leave-filing and approval application. The
 Prerequisites: Node.js 20+, npm, and .NET 10 SDK.
 
 ```powershell
-cd C:\Users\g.adorio\Documents\OnlineFS
 npm ci
 npm run dev
 ```
