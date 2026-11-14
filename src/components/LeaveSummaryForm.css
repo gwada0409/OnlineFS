@@ -1,0 +1,108 @@
+.loa-mobile-heading,
+.loa-mobile-summary { display: none; }
+
+@media screen and (max-width: 767px) {
+  .modal-overlay.loa-dialog {
+    align-items: flex-end;
+    padding: 0;
+    background: #0009;
+  }
+  .loa-dialog .loa-shell {
+    width: 100%;
+    max-width: 100%;
+    max-height: 100dvh;
+    min-width: 0;
+    padding: 0;
+    border-radius: 18px 18px 0 0;
+    background: var(--bg-primary, #0b1020);
+    color: var(--text-primary, #f1f5f9);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-top: 116px;
+  }
+  .loa-dialog .loa-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 8px;
+    margin: 0;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+    background: var(--bg-secondary, #11182b);
+    border-bottom: 1px solid var(--border, #334155);
+    box-shadow: 0 4px 12px #0002;
+  }
+  .loa-mobile-heading {
+    display: block;
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 24px;
+  }
+  .loa-dialog .loa-actions .btn {
+    width: 100%;
+    min-width: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  .loa-dialog .loa-desktop-guide,
+  .loa-dialog .loa-desktop-preview { display: none; }
+  .loa-mobile-summary {
+    display: grid;
+    gap: 20px;
+    padding: 16px max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .loa-mobile-summary * { min-width: 0; }
+  .loa-mobile-summary h3,
+  .loa-mobile-summary h4 { margin: 0; font-weight: 700; }
+  .loa-mobile-summary h3 { font-size: 17px; }
+  .loa-mobile-summary h4 { font-size: 16px; }
+  .loa-mobile-summary p { margin: 6px 0; overflow-wrap: anywhere; }
+  .loa-mobile-summary dt,
+  .loa-mobile-profile > p,
+  .loa-summary-hint { color: var(--text-secondary, #94a3b8); }
+  .loa-mobile-profile h3,
+  .loa-mobile-metadata dd { overflow-wrap: anywhere; }
+  .loa-balance-tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+    gap: 8px;
+    margin: 16px 0;
+  }
+  .loa-balance-tiles > div,
+  .loa-mobile-record {
+    background: var(--bg-secondary, #11182b);
+    border: 1px solid var(--border, #334155);
+    border-radius: 12px;
+    padding: 12px;
+  }
+  .loa-balance-tiles dt { font-size: 12px; }
+  .loa-balance-tiles dd { margin: 6px 0 0; font-size: 23px; font-weight: 700; overflow-wrap: anywhere; }
+  .loa-balance-tiles small { display: block; font-size: 12px; font-weight: 400; }
+  .loa-mobile-history { display: grid; gap: 12px; }
+  .loa-mobile-record-heading { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 12px; }
+  .loa-mobile-record-heading h4 { flex: 1 1 120px; }
+  .loa-mobile-record-heading .badge { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .loa-mobile-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+  .loa-mobile-metadata dt { font-size: 12px; }
+  .loa-mobile-metadata dd { margin: 2px 0 0; }
+  .loa-mobile-reason strong { display: block; font-size: 12px; color: var(--text-secondary, #94a3b8); }
+  .loa-mobile-details { border-top: 1px solid var(--border, #334155); margin-top: 12px; }
+  .loa-mobile-details summary {
+    min-height: 44px;
+    padding: 12px 2px;
+    cursor: pointer;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .loa-mobile-details summary:focus-visible { outline: 2px solid var(--primary, #3b82f6); outline-offset: 2px; }
+  .loa-mobile-approvals { display: grid; gap: 12px; list-style: none; margin: 4px 0 12px; padding: 0; }
+  .loa-mobile-approvals li { display: grid; overflow-wrap: anywhere; }
+  .loa-mobile-approvals span { color: var(--text-secondary, #94a3b8); }
+  .loa-mobile-empty { padding: 16px; border: 1px dashed var(--border, #334155); border-radius: 12px; }
+  .loa-mobile-print-guide { margin-top: 0; }
+}

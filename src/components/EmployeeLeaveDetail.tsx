@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { HRAPI } from '../lib/api';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
+import { DialogOverlay } from './ui/DialogOverlay';
 
 interface EmployeeLeaveDetailProps {
   employee: any;
@@ -41,7 +42,7 @@ export const EmployeeLeaveDetail: React.FC<EmployeeLeaveDetailProps> = ({ employ
   const totalAvailable = employee.balances?.reduce((acc: number, curr: any) => acc + curr.available, 0) || 0;
 
   return (
-    <div className="modal-overlay z-50">
+    <DialogOverlay onClose={onClose} label={`Leave details for ${employee?.fullName ?? employee?.name ?? 'employee'}`} className="z-50" closeOnBackdrop>
       <style>{`
         .leave-modal-inner {
           padding: 16px;
@@ -95,15 +96,15 @@ export const EmployeeLeaveDetail: React.FC<EmployeeLeaveDetailProps> = ({ employ
         }
       `}</style>
       <div className="modal-backdrop" onClick={onClose} />
-      <div className="modal-content animate-slide-up" style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
+      <div className="modal-content employee-leave-detail animate-slide-up" style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
         <div className="leave-modal-inner">
           {/* Header */}
           <div className="border-b border-border flex items-start justify-between pb-4 mb-4 shrink-0 gap-2">
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg md:text-xl font-bold truncate pr-2">{employee.fullName}</h2>
-              <p className="text-xs md:text-sm text-muted truncate">{employee.department} | ID: {employee.employeeID}</p>
+              <h2 className="employee-detail-name text-lg md:text-xl font-bold truncate pr-2">{employee.fullName}</h2>
+              <p className="employee-detail-meta text-xs md:text-sm text-muted truncate">{employee.department} | ID: {employee.employeeID}</p>
             </div>
-            <button className="btn btn-ghost btn-sm p-1 shrink-0" onClick={onClose}><X size={20} /></button>
+            <button type="button" className="btn btn-ghost btn-sm p-1 shrink-0" aria-label="Close leave balances" onClick={onClose}><X size={20} /></button>
           </div>
 
           <div className="flex flex-col shrink-0 pb-0">
@@ -144,7 +145,7 @@ export const EmployeeLeaveDetail: React.FC<EmployeeLeaveDetailProps> = ({ employ
               {activeTab === 'overview' && (
                 <div className="flex flex-col gap-3">
                   <div className="flex justify-end mb-1">
-                    <label className="flex items-center gap-2 text-xs md:text-sm cursor-pointer text-muted hover:text-primary transition-colors">
+                    <label className="employee-show-all flex items-center gap-2 text-xs md:text-sm cursor-pointer text-muted hover:text-primary transition-colors">
                       <input 
                         type="checkbox" 
                         checked={showAllLeaveTypes}
@@ -161,6 +162,11 @@ export const EmployeeLeaveDetail: React.FC<EmployeeLeaveDetailProps> = ({ employ
                       <div key={bal.leaveTypeCode} className="glass-card overflow-hidden leave-type-card">
                         <div 
                           className="flex items-start md:items-center justify-between cursor-pointer hover:bg-base/50 transition-colors"
+                          role="button"
+                          tabIndex={0}
+                          aria-label={`Balance breakdown for ${bal.leaveTypeCode}`}
+                          aria-expanded={isExpanded}
+                          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setExpandedType(isExpanded ? null : bal.leaveTypeCode); } }}
                           onClick={() => setExpandedType(isExpanded ? null : bal.leaveTypeCode)}
                         >
                           <div className="flex-1 min-w-0 pr-2">
@@ -213,29 +219,29 @@ export const EmployeeLeaveDetail: React.FC<EmployeeLeaveDetailProps> = ({ employ
                   {loading ? (
                     <div className="p-8 text-center"><div className="spinner"></div></div>
                   ) : (
-                    <table className="data-table text-sm">
+                    <table className="data-table text-sm mobile-record-table" role="table">
                       <thead>
                         <tr>
-                          <th>Date</th>
-                          <th>Type</th>
-                          <th>Action</th>
-                          <th>Days</th>
-                          <th>Bal</th>
+                          <th scope="col">Date</th>
+                          <th scope="col">Type</th>
+                          <th scope="col">Action</th>
+                          <th scope="col">Days</th>
+                          <th scope="col">Bal</th>
                         </tr>
                       </thead>
                       <tbody>
                         {ledger.map((l: any) => (
                           <tr key={l.id}>
-                            <td className="whitespace-nowrap">{new Date(l.transactionDate).toLocaleDateString()}</td>
-                            <td className="font-bold">{l.leaveTypeCode}</td>
-                            <td>
+                            <td className="whitespace-nowrap" data-label="Date">{new Date(l.transactionDate).toLocaleDateString()}</td>
+                            <td className="font-bold" data-label="Type">{l.leaveTypeCode}</td>
+                            <td data-label="Transaction">
                               <div>{l.transactionType}</div>
-                              <div className="text-xs text-muted truncate max-w-[120px]" title={l.remarks}>{l.remarks}</div>
+                              <div className="employee-ledger-remarks text-xs text-muted truncate max-w-[120px]" title={l.remarks}>{l.remarks}</div>
                             </td>
-                            <td className={l.days > 0 ? 'text-success' : l.days < 0 ? 'text-danger' : ''}>
+                            <td className={l.days > 0 ? 'text-success' : l.days < 0 ? 'text-danger' : ''} data-label="Days">
                               {l.days > 0 ? `+${l.days}` : l.days}
                             </td>
-                            <td className="font-bold">{l.balanceAfterTransaction}</td>
+                            <td className="font-bold" data-label="Bal">{l.balanceAfterTransaction}</td>
                           </tr>
                         ))}
                         {ledger.length === 0 && (
@@ -257,6 +263,6 @@ export const EmployeeLeaveDetail: React.FC<EmployeeLeaveDetailProps> = ({ employ
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 };

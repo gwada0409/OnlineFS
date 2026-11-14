@@ -8,6 +8,7 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.deployment/
 dist
 dist-ssr
 *.local
@@ -22,3 +23,19 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local credentials, deployment copies, and generated artifacts
+.env
+.env.*
+!.env.example
+.local/
+.codex-backup*/
+output/
+tmp/
+graphify-out/
+*.tgz
+*.zip
+*.db*
+*.sqlite*
+*.pem
+*.key

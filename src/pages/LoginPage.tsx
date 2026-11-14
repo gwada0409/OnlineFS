@@ -72,6 +72,11 @@ export const LoginPage: React.FC = () => {
       setShakeKey(k => k + 1);
       return;
     }
+    if (!/^\d{6}$/.test(pin)) {
+      setError('PIN must contain exactly 6 digits.');
+      setShakeKey(k => k + 1);
+      return;
+    }
     
     setError('');
     setLoading(true);
@@ -147,7 +152,7 @@ export const LoginPage: React.FC = () => {
                 <label className="form-label text-xs font-bold uppercase tracking-wide text-muted mb-1.5 block">6-Digit PIN</label>
                 <div style={{ position: 'relative' }}>
                   <Lock size={16} className="text-muted" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-                  <input className="form-input w-full h-12 bg-base/50" style={{ paddingLeft: 36, paddingRight: 40 }} type={showPin ? "text" : "password"} value={pin} onChange={e => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }} placeholder="Enter your PIN (Default: 000000)" inputMode="numeric" />
+                  <input className="form-input w-full h-12 bg-base/50" style={{ paddingLeft: 36, paddingRight: 40 }} type={showPin ? "text" : "password"} value={pin} onChange={e => { setPin(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }} placeholder="Enter your 6-digit PIN" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} autoComplete="current-password" />
                   <button type="button" className="text-muted hover:text-primary transition-colors focus:outline-none" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', padding: 8, cursor: 'pointer' }} onClick={() => setShowPin(!showPin)}>
                     {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>

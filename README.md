@@ -1,95 +1,57 @@
-# OnlineFS - Online Filing System
+# OnlineFS
 
-OnlineFS is a modern, responsive web application designed for streamlined employee leave filing, document submission, leave balance tracking, and approval workflow monitoring.
+OnlineFS is HIBLOW Philippines Inc.'s leave-filing and approval application. The current system is split across:
 
----
+- React/TypeScript/PWA frontend: `C:\Users\g.adorio\Documents\OnlineFS`
+- ASP.NET Core/EF Core/SQLite backend: `C:\Users\g.adorio\Documents\AutoID\src\AutoID`
+- Production SQLite database: `C:\Users\g.adorio\Documents\AutoID\src\AutoID\app.db`
 
-## 🚀 Features
+## Capabilities
 
-- **Leave Request Filing**: Quick and intuitive form for submitting vacation, sick, emergency, and special leaves (`FileLeavePage`).
-- **Leave Request Details**: Real-time status tracking, breakdown of leave days, and detailed approval route history (`LeaveDetailPage`).
-- **Document & Attachment Uploads**: Support for medical certificates, support documents, and file previews.
-- **Responsive UI**: Built with Tailwind CSS and Radix UI components for seamless experience on desktop, tablet, and mobile.
-- **API Integration**: Integrated via Axios for backend API interaction.
+- Employee leave filing, policy validation, attachments, balances, history, cancellation, rescheduling, and printable leave summary
+- Department/category approval routing, delegation, approver actions, and immutable completed approval history
+- HR finalization, balance management, reports, and CSV export
+- Personal, Approval, HR, and System notification workspaces with SignalR and Web Push
+- Admin/SystemAdmin operations with backend-authoritative capability checks
 
----
+## Development setup
 
-## 📁 Repository Structure
+Prerequisites: Node.js 20+, npm, and .NET 10 SDK.
 
-```
-OnlineFS/
-├── src/
-│   ├── components/         # Reusable UI components & Layouts
-│   ├── pages/              # Main application pages (FileLeave, LeaveDetail, etc.)
-│   ├── services/           # Axios API services and endpoints
-│   ├── types/              # TypeScript interface definitions
-│   └── App.tsx             # Application routing and state management
-├── public/                 # Static assets and icons
-├── Dockerfile              # Containerization specification for NGINX deployment
-├── nginx.conf              # NGINX configuration for SPA routing
-├── tailwind.config.js      # Tailwind CSS styling configuration
-├── vite.config.ts          # Vite build runner setup
-└── package.json            # Dependencies and npm scripts
+```powershell
+cd C:\Users\g.adorio\Documents\OnlineFS
+npm ci
+npm run dev
 ```
 
----
+In another PowerShell session, provide an ephemeral development signing key without printing it:
 
-## 🛠️ Tech Stack
-
-- **Framework**: React 19 + TypeScript
-- **Build Tool**: Vite 8
-- **Styling**: Tailwind CSS v4, PostCSS, Radix UI primitives
-- **Icons**: Lucide React
-- **HTTP Client**: Axios
-- **Deployment**: Docker + NGINX
-
----
-
-## 🏁 Getting Started
-
-### Prerequisites
-
-- [Node.js 18+](https://nodejs.org/) & npm
-
-### Development Setup
-
-1. **Install Dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Run Development Server**:
-   ```bash
-   npm run dev
-   ```
-   Open `http://localhost:5173` in your browser.
-
-3. **Build for Production**:
-   ```bash
-   npm run build
-   ```
-
-4. **Preview Production Build**:
-   ```bash
-   npm run preview
-   ```
-
----
-
-## 🐳 Docker Deployment
-
-To build and run the production NGINX container locally:
-
-```bash
-# Build the Docker image
-docker build -t onlinefs:latest .
-
-# Run the container
-docker run -d -p 80:80 onlinefs:latest
+```powershell
+cd C:\Users\g.adorio\Documents\AutoID\src\AutoID
+$env:JWT__SIGNINGKEY = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+dotnet run
 ```
 
----
+Open `http://localhost:5173`. Vite proxies `/api` and `/hubs` to `http://127.0.0.1:5000`.
 
-## 🔒 License
+## Quality gate
 
-Internal & Proprietary Project. All rights reserved.
+Run this before every release:
+
+```powershell
+npm run quality
+```
+
+It performs TypeScript checking, frontend tests, a production PWA build, bundle-budget enforcement, a zero-warning backend Release build, and the complete rebuilt backend suite against isolated in-memory SQLite. It never opens production `app.db`.
+
+## Documentation
+
+- [Architecture and role boundaries](docs/ARCHITECTURE.md)
+- [Operations, migrations, backup, recovery, and deployment](docs/OPERATIONS.md)
+- [API reference](docs/API.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Approval routing design](docs/approval-routing-design.md)
+- [Sick Leave HR review and grouped signatories](docs/SICK_LEAVE_APPROVALS.md)
+- [Refactor audit](REFACTOR_AUDIT.md)
+
+Internal and proprietary. Never commit credentials, JWTs, employee PINs, push private keys, or production database copies.

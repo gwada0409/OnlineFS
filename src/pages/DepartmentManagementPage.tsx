@@ -1,333 +1,461 @@
-import React, { useEffect, useState } from 'react';
-import { DepartmentAPI, HRAPI } from '../lib/api';
-import { Building2, Users, Plus, X, UserPlus, Edit2, Eye } from 'lucide-react';
-import { useToast } from '../components/ToastProvider';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { 
+  DepartmentAPI, 
+  CategoryAPI, 
+  HRAPI, 
+  type ApprovalCategoryNode, 
+  type DepartmentNode, 
+  type HREmployee 
+} from '../lib/api';
+import { getApiErrorMessage } from '../lib/api';
+import { CategoryTree } from './DepartmentManagement/CategoryTree';
+import { CategoryDetailsPanel } from './DepartmentManagement/CategoryDetailsPanel';
+import { UnitDetailsPanel } from './DepartmentManagement/UnitDetailsPanel';
+import { AddEditCategoryModal } from './DepartmentManagement/AddEditCategoryModal';
+import { AddEditUnitModal } from './DepartmentManagement/AddEditUnitModal';
+import { MoveDepartmentModal } from './DepartmentManagement/MoveDepartmentModal';
+import { SetCategoryApproverModal } from './DepartmentManagement/SetCategoryApproverModal';
+import { SetFirstApproverModal } from './DepartmentManagement/SetFirstApproverModal';
+import { ManageEmployeesDrawer } from './DepartmentManagement/ManageEmployeesDrawer';
+import { DeleteUnitDialog } from './DepartmentManagement/DeleteUnitDialog';
+import { 
+  Layers,
+  RefreshCw,
+  CheckCircle, 
+  AlertCircle 
+} from 'lucide-react';
+import { NotificationService } from '../services/notificationService';
 
 export const DepartmentManagementPage: React.FC = () => {
-  const toast = useToast();
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [selectedDept, setSelectedDept] = useState<any>(null);
+  const [categories, setCategories] = useState<ApprovalCategoryNode[]>([]);
+  const [employees, setEmployees] = useState<HREmployee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Forms
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newDeptForm, setNewDeptForm] = useState({ name: '', description: '' });
+  // Selection State
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<number | null>(null);
 
-  const [showAssignForm, setShowAssignForm] = useState(false);
-  const [assignForm, setAssignForm] = useState({ employeeId: 0, position: '', orgRole: 'Employee' });
-  const [isEditingEmployee, setIsEditingEmployee] = useState(false);
-  const [employees, setEmployees] = useState<any[]>([]);
+  // Modal States
+  const [isAddEditCategoryOpen, setIsAddEditCategoryOpen] = useState(false);
+  const [categoryToEdit, setCategoryToEdit] = useState<ApprovalCategoryNode | null>(null);
 
-  useEffect(() => {
-    loadDepartments();
-    HRAPI.getEmployees().then(setEmployees).catch(console.error);
-  }, []);
+  const [isAddEditDeptOpen, setIsAddEditDeptOpen] = useState(false);
+  const [deptToEdit, setDeptToEdit] = useState<DepartmentNode | null>(null);
+  const [focusBackups, setFocusBackups] = useState(false);
+  const [defaultCatIdForDept, setDefaultCatIdForDept] = useState<number | null>(null);
 
-  const loadDepartments = async () => {
-    setLoading(true);
+  const [isMoveDeptOpen, setIsMoveDeptOpen] = useState(false);
+  const [deptToMove, setDeptToMove] = useState<DepartmentNode | null>(null);
+
+  const [isChangeCatApproverOpen, setIsChangeCatApproverOpen] = useState(false);
+  const [catForApprover, setCatForApprover] = useState<ApprovalCategoryNode | null>(null);
+
+  const [isChangeDeptApproverOpen, setIsChangeDeptApproverOpen] = useState(false);
+  const [deptForApprover, setDeptForApprover] = useState<DepartmentNode | null>(null);
+
+  const [isManageEmployeesOpen, setIsManageEmployeesOpen] = useState(false);
+  const [deptForEmployees, setDeptForEmployees] = useState<DepartmentNode | null>(null);
+
+  const [isDeleteDeptOpen, setIsDeleteDeptOpen] = useState(false);
+  const [deptToDelete, setDeptToDelete] = useState<DepartmentNode | null>(null);
+
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 4000);
+  };
+
+  const loadData = useCallback(async () => {
     try {
-      const data = await DepartmentAPI.getAll();
-      setDepartments(data);
-    } catch (e) {
-      console.error(e);
+      setLoading(true);
+      setError(null);
+
+      const [hierarchyData, employeesData] = await Promise.all([
+        DepartmentAPI.getHierarchy(true),
+        HRAPI.getEmployees()
+      ]);
+
+      setCategories(hierarchyData);
+      setEmployees(employeesData);
+
+      // Auto-select first category if none selected
+      if (hierarchyData.length > 0 && selectedCategoryId === null && selectedDepartmentId === null) {
+        setSelectedCategoryId(hierarchyData[0].id);
+      }
+    } catch (err: any) {
+      console.error('Failed to load organizational hierarchy:', err);
+      setError(err?.response?.data?.message || err?.message || 'Failed to load organizational hierarchy');
     } finally {
       setLoading(false);
     }
+  }, [selectedCategoryId, selectedDepartmentId]);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = NotificationService.subscribeOrganizationChanges(() => void loadData());
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void loadData();
+    };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [loadData]);
+
+  // Resolved Current Selected Objects
+  const selectedCategory = useMemo(() => {
+    if (selectedCategoryId === null) return categories[0] || null;
+    return categories.find(c => c.id === selectedCategoryId) || null;
+  }, [categories, selectedCategoryId]);
+
+  const selectedDepartment = useMemo(() => {
+    if (selectedDepartmentId === null) return null;
+    for (const c of categories) {
+      const found = c.departments.find(d => d.id === selectedDepartmentId);
+      if (found) return found;
+    }
+    return null;
+  }, [categories, selectedDepartmentId]);
+
+  // Selection Handlers
+  const handleSelectCategory = (cat: ApprovalCategoryNode) => {
+    setSelectedCategoryId(cat.id);
+    setSelectedDepartmentId(null);
   };
 
-  const loadDepartmentDetails = async (id: number) => {
+  const handleSelectDepartment = (dept: DepartmentNode, cat: ApprovalCategoryNode) => {
+    setSelectedCategoryId(cat.id);
+    setSelectedDepartmentId(dept.id);
+  };
+
+  const handleReorderHierarchy = async (nextCategories: ApprovalCategoryNode[]) => {
+    const previous = categories;
+    setCategories(nextCategories);
     try {
-      const data = await DepartmentAPI.getById(id);
-      setSelectedDept(data);
-    } catch (e) {
-      console.error(e);
-      toast.error('Failed to load department details');
+      await DepartmentAPI.reorderHierarchy({
+        categoryIds: nextCategories.flatMap(category => category.id === null ? [] : [category.id]),
+        groups: nextCategories.map(category => ({
+          categoryId: category.id,
+          departmentIds: category.departments.map(department => department.id)
+        }))
+      });
+      showSuccess('Approval hierarchy order updated.');
+    } catch (err: any) {
+      setCategories(previous);
+      setError(err?.response?.data?.message || err?.response?.data || err?.message || 'Failed to reorder approval hierarchy');
+      await loadData();
     }
   };
 
-  const handleCreateDepartment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await DepartmentAPI.create(newDeptForm);
-      setShowAddForm(false);
-      setNewDeptForm({ name: '', description: '' });
-      toast.success('Department created successfully');
-      loadDepartments();
-    } catch (e) {
-      toast.error("Failed to create department");
+  // --- Category Actions ---
+  const handleOpenAddCategory = () => {
+    setCategoryToEdit(null);
+    setIsAddEditCategoryOpen(true);
+  };
+
+  const handleOpenEditCategory = (cat: ApprovalCategoryNode) => {
+    setCategoryToEdit(cat);
+    setIsAddEditCategoryOpen(true);
+  };
+
+  const handleSaveCategory = async (data: {
+    name: string;
+    description?: string;
+    secondApproverId?: number | null;
+    isActive?: boolean;
+  }) => {
+    if (categoryToEdit && categoryToEdit.id) {
+      await CategoryAPI.update(categoryToEdit.id, data);
+      showSuccess(`Approval category '${data.name}' updated.`);
+    } else {
+      const created = await CategoryAPI.create(data);
+      setSelectedCategoryId(created.id);
+      setSelectedDepartmentId(null);
+      showSuccess(`Approval category '${data.name}' created.`);
+    }
+    await loadData();
+  };
+
+  const handleDeleteCategory = async (cat: ApprovalCategoryNode) => {
+    if (!cat.id) return;
+    if (window.confirm(`Are you sure you want to delete category '${cat.name}'?`)) {
+      try {
+        await CategoryAPI.delete(cat.id);
+        showSuccess(`Category '${cat.name}' deleted.`);
+        setSelectedCategoryId(null);
+        setSelectedDepartmentId(null);
+        await loadData();
+      } catch (err: any) {
+        alert(err?.response?.data?.message || err?.message || 'Cannot delete category with active departments.');
+      }
     }
   };
 
-  const handleAssignEmployee = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDept || assignForm.employeeId === 0) return;
-    
+  const handleOpenChangeCategoryApprover = (cat: ApprovalCategoryNode) => {
+    setCatForApprover(cat);
+    setIsChangeCatApproverOpen(true);
+  };
+
+  const handleSaveCategoryApprover = async (categoryId: number, secondApproverId: number | null) => {
+    await CategoryAPI.setApprover(categoryId, { secondApproverId });
+    showSuccess('Category Approver updated successfully.');
+    await loadData();
+  };
+
+  // --- Department Actions ---
+  const handleOpenAddDepartment = (defaultCatId?: number) => {
+    setDeptToEdit(null);
+    setDefaultCatIdForDept(defaultCatId ?? selectedCategoryId);
+    setIsAddEditDeptOpen(true);
+  };
+
+  const handleOpenEditDepartment = (dept: DepartmentNode, openBackups = false) => {
+    setFocusBackups(openBackups);
+    setDeptToEdit(dept);
+    setIsAddEditDeptOpen(true);
+  };
+
+  const handleSaveDepartment = async (data: {
+    name: string;
+    description?: string;
+    categoryId?: number | null;
+    firstApproverId?: number | null;
+    firstApproverIds?: number[];
+    notedByApproverIds?: number[];
+    backupApprovers?: { notedBy: number | null; recommending: number | null; approver: number | null };
+    requiresOperatorLineLeader?: boolean;
+    sickLeaveLineLeaderId?: number | null;
+    operatorLineLeaderAssignments?: Record<number, number | null>;
+
+    secondApproverOverrideId?: number | null;
+    isActive?: boolean;
+  }) => {
+    if (deptToEdit) {
+      await DepartmentAPI.update(deptToEdit.id, data);
+      showSuccess(`Department '${data.name}' updated.`);
+    } else {
+      const created = await DepartmentAPI.create(data);
+      if (data.categoryId) setSelectedCategoryId(data.categoryId);
+      setSelectedDepartmentId(created.id);
+      showSuccess(`Department '${data.name}' created.`);
+    }
+    await loadData();
+  };
+
+  const handleOpenMoveDepartment = (dept: DepartmentNode) => {
+    setDeptToMove(dept);
+    setIsMoveDeptOpen(true);
+  };
+
+  const handleConfirmMoveDepartment = async (departmentId: number, targetCategoryId: number | null) => {
+    await DepartmentAPI.assignCategory(departmentId, { categoryId: targetCategoryId });
+    if (targetCategoryId) setSelectedCategoryId(targetCategoryId);
+    showSuccess('Department moved to new approval category.');
+    await loadData();
+  };
+
+  const handleOpenChangeFirstApprover = (dept: DepartmentNode) => {
+    setDeptForApprover(dept);
+    setIsChangeDeptApproverOpen(true);
+  };
+
+  const handleSaveFirstApprover = async (departmentId: number, firstApproverIds: number[]) => {
+    await DepartmentAPI.setFirstApprover(departmentId, { firstApproverIds });
+    showSuccess('Department Recommending role updated successfully.');
+    await loadData();
+  };
+
+  const handleOpenManageEmployees = (dept: DepartmentNode) => {
+    setDeptForEmployees(dept);
+    setIsManageEmployeesOpen(true);
+  };
+
+  const handleSaveEmployeesBatch = async (deptId: number, selectedEmployeeIds: number[]) => {
+    await DepartmentAPI.assignEmployeesBatch(deptId, { selectedEmployeeIds });
+    showSuccess('Department employee assignments updated.');
+    await loadData();
+  };
+
+  const handleUnassignEmployee = async (deptId: number, employeeId: number) => {
     try {
-      await DepartmentAPI.assignEmployee(selectedDept.id, assignForm);
-      setShowAssignForm(false);
-      setIsEditingEmployee(false);
-      setAssignForm({ employeeId: 0, position: '', orgRole: 'Employee' });
-      toast.success(isEditingEmployee ? 'Employee updated successfully' : 'Employee assigned successfully');
-      loadDepartmentDetails(selectedDept.id);
-      loadDepartments();
-    } catch (e) {
-      toast.error("Failed to assign/update employee");
+      setError(null);
+      await DepartmentAPI.unassignEmployee(deptId, employeeId);
+      showSuccess('Employee removed from department.');
+      await loadData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, 'Failed to remove employee from department.'));
+      throw err;
     }
   };
 
-  const handleEditEmployee = (e: any) => {
-    setAssignForm({
-      employeeId: e.id,
-      position: e.position || '',
-      orgRole: e.orgRole || 'Employee'
-    });
-    setIsEditingEmployee(true);
-    setShowAssignForm(true);
+  const handleOpenDeleteDepartment = (dept: DepartmentNode) => {
+    setDeptToDelete(dept);
+    setIsDeleteDeptOpen(true);
+  };
+
+  const handleConfirmDeleteDepartment = async (deptId: number) => {
+    await DepartmentAPI.delete(deptId);
+    showSuccess('Department deleted successfully.');
+    setSelectedDepartmentId(null);
+    await loadData();
   };
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <h1 className="page-title flex items-center">Department Management</h1>
-        <button className="btn btn-primary" onClick={() => setShowAddForm(true)}>
-          <Plus size={18} /> New Department
+    <div className="department-workspace animate-fade-in space-y-3">
+      <div className="flex justify-end">
+        <button
+          className="btn btn-outline btn-sm text-xs flex items-center gap-1.5"
+          onClick={loadData}
+          disabled={loading}
+          title="Refresh structure"
+        >
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
         </button>
       </div>
 
-      <div className="dashboard-grid two-cols">
-        <div className="glass-card">
-          <div className="glass-card-header">
-            <h2 className="flex items-center gap-2"><Building2 size={18} className="text-[var(--primary)]" /> Departments</h2>
-          </div>
-          <div className="glass-card-body p-0">
-            {loading ? <div style={{ padding: '1.5rem' }}>Loading...</div> : (
-              <>
-                <div className="desktop-only">
-                  <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Description</th>
-                      <th>Employees</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {departments.map(d => (
-                      <tr key={d.id} className={`hoverable-row ${selectedDept?.id === d.id ? 'selected-row' : ''}`} onClick={() => loadDepartmentDetails(d.id)}>
-                        <td>{d.name}</td>
-                        <td>{d.description}</td>
-                        <td>{d.employeeCount}</td>
-                        <td>
-                          <button className="btn btn-outline btn-sm text-[var(--primary)] border-[var(--primary)] hover:bg-[var(--primary)] hover:text-white flex items-center gap-1" onClick={(e) => { e.stopPropagation(); loadDepartmentDetails(d.id); }}>
-                            <Eye size={14} /> View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {departments.length === 0 && (
-                      <tr>
-                        <td colSpan={4} style={{ textAlign: 'center' }}>No departments found</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-                </div>
-                
-                <div className="mobile-only">
-                  <div className="p-4 flex flex-col gap-4">
-                  {departments.map(d => (
-                    <div key={`mob-${d.id}`} className="glass-card p-4 flex flex-col gap-2" style={{ border: selectedDept?.id === d.id ? '1px solid var(--primary)' : '1px solid var(--border)' }}>
-                      <div className="font-bold text-lg">{d.name}</div>
-                      <div className="text-sm text-muted mb-2">{d.description}</div>
-                      <div className="text-sm mb-4"><strong>Employees:</strong> {d.employeeCount}</div>
-                      
-                      {selectedDept?.id === d.id ? (
-                        <>
-                          <button className="btn btn-outline btn-sm w-full text-danger border-danger hover:bg-danger hover:text-white flex items-center justify-center gap-1" onClick={() => setSelectedDept(null)}>
-                            <X size={14} /> Close
-                          </button>
-                          <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--border)' }}>
-                             <div className="flex justify-between items-center mb-4">
-                               <h4 className="font-bold">Employees</h4>
-                               <button className="btn btn-primary btn-sm" onClick={() => {
-                                 setAssignForm({ employeeId: 0, position: '', orgRole: 'Employee' });
-                                 setIsEditingEmployee(false);
-                                 setShowAssignForm(true);
-                               }}>
-                                 <UserPlus size={14} /> Assign
-                               </button>
-                             </div>
-                             {selectedDept.employees?.length > 0 ? (
-                               <div className="flex flex-col gap-2">
-                                 {selectedDept.employees.map((e: any) => (
-                                   <div key={`emp-${e.id}`} className="p-3 bg-[var(--bg-input)] rounded-md border border-[var(--border)]">
-                                     <div className="flex justify-between items-start mb-2">
-                                       <div>
-                                         <div className="font-bold">{e.fullName}</div>
-                                         <div className="text-xs text-muted">{e.employeeID} - {e.position}</div>
-                                       </div>
-                                       <span className={`status-badge status-${e.orgRole.toLowerCase()}`}>{e.orgRole}</span>
-                                     </div>
-                                     <button className="btn btn-ghost btn-sm w-full text-[var(--primary)] border border-[var(--border)]" onClick={() => handleEditEmployee(e)}>
-                                       <Edit2 size={14} className="mr-1" /> Edit Role
-                                     </button>
-                                   </div>
-                                 ))}
-                               </div>
-                             ) : (
-                               <div className="text-center text-muted text-sm p-4 bg-[var(--bg-input)] rounded-md border border-[var(--border)]">No employees found for this department.</div>
-                             )}
-                          </div>
-                        </>
-                      ) : (
-                        <button className="btn btn-outline btn-sm w-full text-[var(--primary)] border-[var(--primary)] hover:bg-[var(--primary)] hover:text-white flex items-center justify-center gap-1" onClick={() => loadDepartmentDetails(d.id)}>
-                          <Eye size={14} /> View
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {departments.length === 0 && (
-                    <div className="text-center text-muted p-4">No departments found</div>
-                  )}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
+      {/* Success Notification Alert */}
+      {successMessage && (
+        <div className="alert alert-success p-3 text-xs rounded-xl flex items-center gap-2 animate-fade-in shadow-sm">
+          <CheckCircle size={16} className="text-success shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {/* Error Alert */}
+      {error && (
+        <div className="alert alert-danger p-3 text-xs rounded-xl flex items-center gap-2 animate-fade-in shadow-sm">
+          <AlertCircle size={16} className="text-danger shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Two-Column Main Layout */}
+      <div className="department-workspace-grid grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Left Column: Category & Department Tree (4 cols) */}
+        <div className="department-workspace-panel lg:col-span-4">
+        <CategoryTree
+            categories={categories}
+            selectedCategoryId={selectedCategoryId}
+            selectedDepartmentId={selectedDepartmentId}
+            onSelectCategory={handleSelectCategory}
+            onSelectDepartment={handleSelectDepartment}
+            onAddCategory={handleOpenAddCategory}
+          onAddDepartment={handleOpenAddDepartment}
+          onReorderHierarchy={handleReorderHierarchy}
+        />
         </div>
 
-        {selectedDept ? (
-          <div className="glass-card animate-slide-up desktop-only">
-            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px 24px 16px 24px' }}>
-              <h3 className="flex items-center"><Users size={18} className="mr-2 text-[var(--primary)]" /> {selectedDept.name} - Employees</h3>
-              <button className="btn btn-primary btn-sm" onClick={() => {
-                setAssignForm({ employeeId: 0, position: '', orgRole: 'Employee' });
-                setIsEditingEmployee(false);
-                setShowAssignForm(true);
-              }}>
-                <UserPlus size={16} /> Assign Employee
-              </button>
+        {/* Right Column: Details Panel (8 cols) */}
+        <div className="department-workspace-panel lg:col-span-8">
+          {selectedDepartment ? (
+            <UnitDetailsPanel
+              employees={employees}
+              unit={selectedDepartment}
+              category={selectedCategory}
+              onEditUnit={handleOpenEditDepartment}
+              onDeleteUnit={handleOpenDeleteDepartment}
+              onManageEmployees={handleOpenManageEmployees}
+              onMoveCategory={handleOpenMoveDepartment}
+              onChangeFirstApprover={handleOpenChangeFirstApprover}
+              onUnassignEmployee={handleUnassignEmployee}
+            />
+          ) : selectedCategory ? (
+            <CategoryDetailsPanel
+              category={selectedCategory}
+              onEditCategory={handleOpenEditCategory}
+              onDeleteCategory={handleDeleteCategory}
+              onChangeApprover={handleOpenChangeCategoryApprover}
+              onAddDepartment={handleOpenAddDepartment}
+              onSelectDepartment={(dept) => handleSelectDepartment(dept, selectedCategory)}
+              onEditDepartment={handleOpenEditDepartment}
+              onMoveDepartment={handleOpenMoveDepartment}
+              onManageEmployees={handleOpenManageEmployees}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full bg-surface rounded-2xl border border-border p-10 text-center space-y-4">
+              <Layers size={48} className="text-muted/40" />
+              <div>
+                <h3 className="text-base font-bold text-text-primary">
+                  Select an Approval Category or Department
+                </h3>
+                <p className="text-xs text-muted max-w-sm mt-1">
+                  Choose an item from the left hierarchy to inspect approver settings, member lists, and route preview.
+                </p>
+              </div>
             </div>
-            <div className="card-content" style={{ padding: '0 24px 24px 24px' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Name</th>
-                    <th>Position</th>
-                    <th>Role</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedDept.employees?.map((e: any) => (
-                    <tr key={e.id}>
-                      <td>{e.employeeID}</td>
-                      <td>{e.fullName}</td>
-                      <td>{e.position}</td>
-                      <td>
-                        <span className={`status-badge status-${e.orgRole.toLowerCase()}`}>{e.orgRole}</span>
-                      </td>
-                      <td>
-                        <button className="btn btn-outline btn-sm text-[var(--primary)] border-[var(--primary)] hover:bg-[var(--primary)] hover:text-white" onClick={() => handleEditEmployee(e)} title="Edit Role/Position">
-                          <Edit2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {(!selectedDept.employees || selectedDept.employees.length === 0) && (
-                    <tr>
-                      <td colSpan={5} style={{ textAlign: 'center' }}>No employees in this department</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <div className="glass-card desktop-only flex flex-col items-center justify-center text-muted" style={{ minHeight: '400px' }}>
-            <Building2 size={48} className="mb-4 opacity-50" />
-            <p>Select a department to view details.</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* Add Department Modal */}
-      {showAddForm && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>Create New Department</h3>
-              <button className="btn btn-ghost" onClick={() => setShowAddForm(false)}><X size={20} /></button>
-            </div>
-            <form onSubmit={handleCreateDepartment}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Department Name</label>
-                  <input type="text" className="form-input" required
-                         value={newDeptForm.name} onChange={e => setNewDeptForm({ ...newDeptForm, name: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea className="form-input" rows={3}
-                            value={newDeptForm.description} onChange={e => setNewDeptForm({ ...newDeptForm, description: e.target.value })} />
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowAddForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* All Modal Dialogs */}
+      <AddEditCategoryModal
+        isOpen={isAddEditCategoryOpen}
+        onClose={() => setIsAddEditCategoryOpen(false)}
+        onSubmit={handleSaveCategory}
+        categoryToEdit={categoryToEdit}
+        employees={employees}
+      />
 
-      {/* Assign Employee Modal */}
-      {showAssignForm && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h3>{isEditingEmployee ? `Edit Employee in ${selectedDept?.name}` : `Assign Employee to ${selectedDept?.name}`}</h3>
-              <button className="btn btn-ghost" onClick={() => setShowAssignForm(false)}><X size={20} /></button>
-            </div>
-            <form onSubmit={handleAssignEmployee}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label>Select Employee</label>
-                  <select className="form-input" required disabled={isEditingEmployee}
-                          value={assignForm.employeeId} onChange={e => setAssignForm({ ...assignForm, employeeId: Number(e.target.value) })}>
-                    <option value={0}>-- Select Employee --</option>
-                    {employees.map(e => (
-                      <option key={e.id} value={e.id}>{e.employeeID} - {e.fullName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Position / Title</label>
-                  <input type="text" className="form-input"
-                         value={assignForm.position} onChange={e => setAssignForm({ ...assignForm, position: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label>Role in Department (for approvals)</label>
-                  <select className="form-input" required
-                          value={assignForm.orgRole} onChange={e => setAssignForm({ ...assignForm, orgRole: e.target.value })}>
-                    <option value="Employee">Employee</option>
-                    <option value="Supervisor">Supervisor</option>
-                    <option value="DeptManager">Department Manager</option>
-                    <option value="HRStaff">HR Staff</option>
-                    <option value="HRManager">HR Manager</option>
-                  </select>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-outline" onClick={() => setShowAssignForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">{isEditingEmployee ? 'Save Changes' : 'Assign Employee'}</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddEditUnitModal
+        isOpen={isAddEditDeptOpen}
+        onClose={() => setIsAddEditDeptOpen(false)}
+        onSubmit={handleSaveDepartment}
+        unitToEdit={deptToEdit}
+        focusBackups={Boolean(deptToEdit) && focusBackups}
+        categories={categories}
+        employees={employees}
+        defaultCategoryId={defaultCatIdForDept}
+      />
+
+      <MoveDepartmentModal
+        isOpen={isMoveDeptOpen}
+        onClose={() => setIsMoveDeptOpen(false)}
+        department={deptToMove}
+        categories={categories}
+        onMove={handleConfirmMoveDepartment}
+      />
+
+      <SetCategoryApproverModal
+        isOpen={isChangeCatApproverOpen}
+        onClose={() => setIsChangeCatApproverOpen(false)}
+        category={catForApprover}
+        employees={employees}
+        onSave={handleSaveCategoryApprover}
+      />
+
+      <SetFirstApproverModal
+        isOpen={isChangeDeptApproverOpen}
+        onClose={() => setIsChangeDeptApproverOpen(false)}
+        department={deptForApprover}
+        employees={employees}
+        onSave={handleSaveFirstApprover}
+      />
+
+      <ManageEmployeesDrawer
+        isOpen={isManageEmployeesOpen}
+        onClose={() => setIsManageEmployeesOpen(false)}
+        selectedUnit={deptForEmployees}
+        allEmployees={employees}
+        onSaveAssignments={handleSaveEmployeesBatch}
+      />
+
+      <DeleteUnitDialog
+        isOpen={isDeleteDeptOpen}
+        onClose={() => setIsDeleteDeptOpen(false)}
+        unit={deptToDelete}
+        onConfirmDelete={handleConfirmDeleteDepartment}
+        onOpenManageEmployees={() => {
+          setIsDeleteDeptOpen(false);
+          if (deptToDelete) handleOpenManageEmployees(deptToDelete);
+        }}
+      />
     </div>
   );
 };

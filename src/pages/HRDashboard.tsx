@@ -1,36 +1,47 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { HRAPI, LeaveAPI, ApprovalAPI } from '../lib/api';
-import { Users, FileBarChart, X, CheckSquare, LayoutDashboard, Download, Eye, Edit2, User, Clock } from 'lucide-react';
-import { EmployeeLeaveDetail } from '../components/EmployeeLeaveDetail';
+import { HRAPI, LeaveAPI, ApprovalAPI, getApiErrorMessage } from '../lib/api';
+import { FileBarChart, X, CheckSquare, LayoutDashboard, Download, Eye, Clock, Paperclip, BellRing } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/ToastProvider';
+import { DialogOverlay } from '../components/ui/DialogOverlay';
+import { NotificationService } from '../services/notificationService';
+import { PageError, PageLoading } from '../components/ui/PageState';
+import { useLatestRequest } from '../hooks/useLatestRequest';
+import { AttachmentPreviewModal } from '../components/AttachmentPreviewModal';
+import { approvalStageLabel } from '../lib/approvalLabels';
+import { ReportDesigner } from '../components/ReportDesigner';
+import { useConfirm } from '../components/ConfirmDialog';
+
+const formatRequestDuration = (request: { totalDays?: number; totalHours?: number }) => {
+  const hours = Number(request.totalHours) || 0;
+  if (hours > 0) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+  const days = Number(request.totalDays) || 0;
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+};
 
 export const HRDashboard: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
-  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'balances' | 'company-pending' | 'reports'>('overview');
+  const confirm = useConfirm();
+  const [activeTab, setActiveTab] = useState<'overview' | 'ledger' | 'company-pending' | 'reports'>('overview');
   const [summary, setSummary] = useState<any>(null);
   const [overviewError, setOverviewError] = useState(false);
   const [ledger, setLedger] = useState<any[]>([]);
   const [companyPending, setCompanyPending] = useState<any[]>([]);
-  const [balances, setBalances] = useState<any[]>([]);
-  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewingEmployee, setViewingEmployee] = useState<any | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
-  
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [deptFilter, setDeptFilter] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const loadRequest = useLatestRequest();
 
-  // Edit Balance State
-  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({ leaveTypeId: 0, totalCredits: 0, carryOver: 0, hrRemarks: '' });
-  
   // Finalize Request State
   const [finalizingRequest, setFinalizingRequest] = useState<any | null>(null);
+  const [viewingRequest, setViewingRequest] = useState<any | null>(null);
+  const [viewingRequestLoading, setViewingRequestLoading] = useState(false);
+  const [selectedAttachment, setSelectedAttachment] = useState<any | null>(null);
+  const [attachmentBlobUrl, setAttachmentBlobUrl] = useState<string | null>(null);
+  const [overviewModal, setOverviewModal] = useState<{ kind: 'pending' | 'on-leave' | 'low-balance' | 'decisions'; title: string; items: any[] } | null>(null);
+  const [overviewModalLoading, setOverviewModalLoading] = useState(false);
   const [finalizeForm, setFinalizeForm] = useState({ notedByHR: '', hrRemarks: '' });
 
   const [reportDateFrom, setReportDateFrom] = useState('');
@@ -40,88 +51,123 @@ export const HRDashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    if (leaveTypes.length === 0) {
-      LeaveAPI.getTypes().then(setLeaveTypes).catch(console.error);
-    }
     setFinalizeForm(prev => ({ ...prev, notedByHR: user?.username || '' }));
   }, [activeTab]);
 
+  useEffect(() => {
+    const refresh = () => { void loadData(); };
+    const unsubscribeNotifications = NotificationService.subscribe(notification => {
+      if (!notification || notification.type.includes('Leave') || notification.type.includes('Approval') || notification.type.includes('HR')) refresh();
+    });
+    const unsubscribeOrganization = NotificationService.subscribeOrganizationChanges(refresh);
+    const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      unsubscribeNotifications();
+      unsubscribeOrganization();
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [activeTab]);
+
   const loadData = async () => {
+    const request = loadRequest.begin();
     setLoading(true);
     try {
       if (activeTab === 'overview') {
         try {
           const data = await HRAPI.getLeaveSummary();
+          if (!loadRequest.isCurrent(request)) return;
           setSummary(data || null);
           setOverviewError(!data);
+          setLoadError('');
         } catch (e) {
           console.error("Failed to load overview data:", e);
+          if (!loadRequest.isCurrent(request)) return;
           setOverviewError(true);
           setSummary(null);
+          setLoadError(getApiErrorMessage(e, 'Could not load the HR overview.'));
         }
       } else if (activeTab === 'ledger') {
-        const data = await HRAPI.getLeaveLedger(); // Actually gets pending leave requests to finalize
+        const data = await HRAPI.getFinalizationPending();
+        if (!loadRequest.isCurrent(request)) return;
         setLedger(data);
-      } else if (activeTab === 'balances') {
-        const data = await HRAPI.getEmployeeBalances();
-        setBalances(data);
       } else if (activeTab === 'company-pending') {
         const data = await ApprovalAPI.getAllPending();
+        if (!loadRequest.isCurrent(request)) return;
         setCompanyPending(data);
       }
+      if (loadRequest.isCurrent(request) && activeTab !== 'overview') setLoadError('');
     } catch (e) {
-      console.error(e);
+      if (loadRequest.isCurrent(request)) setLoadError(getApiErrorMessage(e, 'Could not load this HR view.'));
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditClick = (employee: any) => {
-    setEditingEmployee(employee);
-    // Default to the first leave type
-    if (leaveTypes.length > 0) {
-      const typeId = leaveTypes[0].id;
-      const existingBal = employee.balances?.find((b: any) => b.leaveTypeCode === leaveTypes[0].code);
-      setEditForm({
-        leaveTypeId: typeId,
-        totalCredits: existingBal?.totalCredits || 0,
-        carryOver: existingBal?.carryOver || 0,
-        hrRemarks: existingBal?.hrRemarks || ''
-      });
-    }
-  };
-
-  const handleLeaveTypeChange = (typeId: number) => {
-    const typeCode = leaveTypes.find(t => t.id === typeId)?.code;
-    const existingBal = editingEmployee?.balances?.find((b: any) => b.leaveTypeCode === typeCode);
-    setEditForm({
-      leaveTypeId: typeId,
-      totalCredits: existingBal?.totalCredits || 0,
-      carryOver: existingBal?.carryOver || 0,
-      hrRemarks: existingBal?.hrRemarks || ''
-    });
-  };
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingEmployee || editForm.leaveTypeId === 0) return;
-    
-    setSubmitting(true);
-    try {
-      await HRAPI.updateBalance(editingEmployee.id, editForm);
-      setEditingEmployee(null);
-      toast.success('Leave balance updated successfully');
-      loadData(); // Refresh balances
-    } catch (err: any) {
-      toast.error(err.response?.data || 'Failed to update balance');
-    } finally {
-      setSubmitting(false);
+      if (loadRequest.isCurrent(request)) setLoading(false);
     }
   };
 
   const handleFinalizeClick = (request: any) => {
     setFinalizingRequest(request);
     setFinalizeForm({ notedByHR: user?.username || '', hrRemarks: '' });
+  };
+
+  const handleViewRequest = async (request: any) => {
+    setViewingRequest(request);
+    setViewingRequestLoading(true);
+    try {
+      setViewingRequest(await LeaveAPI.getRequest(request.leaveRequestId || request.id));
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to load request details'));
+    } finally {
+      setViewingRequestLoading(false);
+    }
+  };
+
+  const handleViewAttachment = async (attachment: any) => {
+    try {
+      const blob = await LeaveAPI.getAttachment(attachment.id);
+      if (attachmentBlobUrl) URL.revokeObjectURL(attachmentBlobUrl);
+      setAttachmentBlobUrl(URL.createObjectURL(blob));
+      setSelectedAttachment(attachment);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, 'Failed to open attachment'));
+    }
+  };
+
+  const closeAttachment = () => {
+    if (attachmentBlobUrl) URL.revokeObjectURL(attachmentBlobUrl);
+    setAttachmentBlobUrl(null);
+    setSelectedAttachment(null);
+  };
+
+  const openOverviewModal = async (kind: 'pending' | 'on-leave' | 'low-balance' | 'decisions', title: string) => {
+    setOverviewModal({ kind, title, items: [] });
+    setOverviewModalLoading(true);
+    try {
+      let items: any[];
+      if (kind === 'pending') {
+        items = await ApprovalAPI.getAllPending();
+      } else if (kind === 'low-balance') {
+        const employees = await HRAPI.getEmployeeBalances();
+        items = employees.filter((employee: any) => employee.balances?.some((balance: any) => Number(balance.totalCredits) + Number(balance.carryOver) > 0 && Number(balance.available) < 3));
+      } else {
+        const requests = await HRAPI.getLeaveLedger();
+        const now = new Date();
+        if (kind === 'on-leave') {
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+          items = requests.filter((request: any) => request.status === 'Approved' && new Date(request.dateFrom).getTime() <= today && new Date(request.dateTo).getTime() >= today);
+        } else {
+          items = requests.filter((request: any) => {
+            const decisionDate = request.updatedAt || request.dateProcessed ? new Date(request.updatedAt || request.dateProcessed) : null;
+            return ['Approved', 'Disapproved'].includes(request.status) && decisionDate?.getMonth() === now.getMonth() && decisionDate?.getFullYear() === now.getFullYear();
+          });
+        }
+      }
+      setOverviewModal(current => current?.kind === kind ? { ...current, items } : current);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, `Failed to load ${title.toLowerCase()}`));
+      setOverviewModal(null);
+    } finally {
+      setOverviewModalLoading(false);
+    }
   };
 
   const handleFinalizeSubmit = async (e: React.FormEvent) => {
@@ -141,70 +187,53 @@ export const HRDashboard: React.FC = () => {
     }
   };
 
-  const downloadCSV = (data: any[], filename: string) => {
-    if (!data || data.length === 0) {
-      toast.error('No data to export');
-      return;
-    }
-    const headers = Object.keys(data[0]);
-    const csvRows = [];
-    csvRows.push(headers.join(','));
-    
-    for (const row of data) {
-      const values = headers.map(header => {
-        const val = row[header] === null || row[header] === undefined ? '' : row[header];
-        return `"${String(val).replace(/"/g, '""')}"`;
-      });
-      csvRows.push(values.join(','));
-    }
-    
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
   const handleDownloadAnnualReport = async () => {
     try {
       toast.info('Generating report...');
-      const data = await HRAPI.getAnnualReport(new Date().getFullYear(), reportDateFrom || undefined, reportDateTo || undefined);
-      
-      const formatted = data.map((b: any) => ({
-        EmployeeID: b.employeeID,
-        Name: b.fullName,
-        Department: b.department,
-        Total_Leaves_Taken: b.totalLeavesTaken,
-        Total_Days: b.totalDays,
-        VL_Taken: b.byType?.find((x:any)=>x.leaveType==='VL')?.count || 0,
-        VL_Days: b.byType?.find((x:any)=>x.leaveType==='VL')?.days || 0,
-        SL_Taken: b.byType?.find((x:any)=>x.leaveType==='SL')?.count || 0,
-        SL_Days: b.byType?.find((x:any)=>x.leaveType==='SL')?.days || 0,
-      }));
-      downloadCSV(formatted, `Annual_Leave_Report_${new Date().getFullYear()}.csv`);
+      if (reportDateFrom && reportDateTo && reportDateFrom > reportDateTo) {
+        toast.error('Date To must be on or after Date From.');
+        return;
+      }
+      const response = await HRAPI.exportLeaveReport(new Date().getFullYear(), reportDateFrom || undefined, reportDateTo || undefined);
+      const disposition = response.headers['content-disposition'] as string | undefined;
+      const encodedName = disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const quotedName = disposition?.match(/filename="?([^";]+)"?/i)?.[1];
+      const filename = encodedName ? decodeURIComponent(encodedName) : quotedName || `Leave_Report_${new Date().getFullYear()}.csv`;
+      const url = window.URL.createObjectURL(response.data);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
+      toast.success('CSV report downloaded.');
     } catch (e) {
-      toast.error('Failed to generate report');
+      toast.error(getApiErrorMessage(e, 'Failed to generate report'));
     }
   };
 
+  const handleNotifyApprover = async (leaveRequestId: number) => {
+    if (!await confirm({ title: 'Notify approver', message: 'Send a reminder to the approver assigned to this pending request? Reminders are limited to once every four hours per approval step.', confirmText: 'Send reminder' })) return;
+    try { await HRAPI.notifyApprover(leaveRequestId); toast.success('Approver notified.'); }
+    catch (error) { toast.error(getApiErrorMessage(error, 'Could not notify the approver.')); }
+  };
+
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in hr-page">
       <div className="page-header">
         <h1>HR Administration</h1>
-        <p>Manage employee leaves, balances, and generate reports</p>
+        <p>Review employee leaves, finalize requests, and generate reports</p>
       </div>
 
       <div className="page-body">
         {/* Tabs */}
-        <div className="flex gap-2 mb-6 border-b scroll-x-auto" style={{ borderColor: 'var(--border)', paddingBottom: 16 }}>
+        <div className="md:hidden mb-5"><label className="form-label" htmlFor="hr-mobile-section">HR Section</label><select id="hr-mobile-section" className="form-select" value={activeTab} onChange={event => setActiveTab(event.target.value as typeof activeTab)}><option value="overview">Overview</option><option value="ledger">Finalize Requests</option><option value="company-pending">Company Pending</option><option value="reports">Analytics & Reports</option></select></div>
+        <div className="hr-desktop-tabs hidden md:flex gap-2 mb-6 border-b scroll-x-auto" style={{ borderColor: 'var(--border)', paddingBottom: 16 }}>
           <button className={`btn ${activeTab === 'overview' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('overview')}>
             <LayoutDashboard size={16} /> Overview
           </button>
-          <button className={`btn ${activeTab === 'balances' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('balances')}>
-            <Users size={16} /> Employee Balances
-          </button>
+
           <button className={`btn ${activeTab === 'ledger' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setActiveTab('ledger')}>
             <CheckSquare size={16} /> Finalize Requests
           </button>
@@ -217,7 +246,9 @@ export const HRDashboard: React.FC = () => {
         </div>
 
         {loading ? (
-          <div className="loading-spinner"><div className="spinner"></div></div>
+          <PageLoading label="Loading HR dashboard"/>
+        ) : loadError && activeTab !== 'overview' ? (
+          <PageError message={loadError} onRetry={() => void loadData()}/>
         ) : (
           <div className="glass-card">
             {activeTab === 'overview' && (
@@ -228,7 +259,7 @@ export const HRDashboard: React.FC = () => {
                     <h3 className="mb-2">{overviewError ? 'Unable to load HR overview data.' : 'No HR overview data available yet.'}</h3>
                     <p className="text-muted mb-6">Use the tools below to manage HR activities.</p>
                     <div className="flex flex-wrap justify-center gap-3">
-                      <button className="btn btn-primary min-h-[44px]" onClick={() => setActiveTab('balances')}>Go to Employee Balances</button>
+                      <button className="btn btn-primary min-h-[44px]" onClick={() => navigate('/hr/employment-status')}>Go to Employee Hub</button>
                       <button className="btn btn-outline min-h-[44px]" onClick={() => setActiveTab('ledger')}>Finalize Requests</button>
                       <button className="btn btn-outline min-h-[44px]" onClick={() => setActiveTab('reports')}>Generate Reports</button>
                     </div>
@@ -236,40 +267,44 @@ export const HRDashboard: React.FC = () => {
                 ) : (
                   <div className="glass-card-body">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                  <div className="stat-card">
+                  <button type="button" className="stat-card text-left w-full cursor-pointer hover:border-primary transition-colors" onClick={() => openOverviewModal('pending', 'Pending Leave Requests')}>
                     <div className="stat-title">Pending Leave Requests</div>
                     <div className="stat-value text-warning">{summary.totalPending}</div>
-                  </div>
-                  <div className="stat-card">
+                    <div className="text-[11px] text-muted mt-1">Click to view</div>
+                  </button>
+                  <button type="button" className="stat-card text-left w-full cursor-pointer hover:border-primary transition-colors" onClick={() => openOverviewModal('on-leave', 'Employees on Leave')}>
                     <div className="stat-title">Employees on Leave</div>
                     <div className="stat-value text-info">{summary.employeesOnLeave}</div>
-                  </div>
-                  <div className="stat-card">
+                    <div className="text-[11px] text-muted mt-1">Click to view</div>
+                  </button>
+                  <button type="button" className="stat-card text-left w-full cursor-pointer hover:border-primary transition-colors" onClick={() => openOverviewModal('low-balance', 'Employees with Low Balance')}>
                     <div className="stat-title">Low Balance (&lt; 3 Days)</div>
                     <div className="stat-value text-danger">{summary.employeesLowBalance}</div>
-                  </div>
-                  <div className="stat-card">
+                    <div className="text-[11px] text-muted mt-1">Click to view</div>
+                  </button>
+                  <button type="button" className="stat-card text-left w-full cursor-pointer hover:border-primary transition-colors" onClick={() => openOverviewModal('decisions', 'Approved / Rejected This Month')}>
                     <div className="stat-title">Approved / Rejected This Month</div>
                     <div className="stat-value">
                       <span className="text-success">{summary.approvedThisMonth}</span> / <span className="text-danger">{summary.rejectedThisMonth}</span>
                     </div>
-                  </div>
+                    <div className="text-[11px] text-muted mt-1">Click to view</div>
+                  </button>
                 </div>
                 
                 <h3 className="mb-4">Department Leave Summary</h3>
                 <div className="data-table-wrapper">
-                  <table className="data-table">
+                  <table className="data-table mobile-record-table" role="table">
                     <thead>
                       <tr>
-                        <th>Department</th>
-                        <th>Approved Leaves (YTD)</th>
+                        <th scope="col">Department</th>
+                        <th scope="col">Approved Leaves (YTD)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {summary.departmentSummary?.map((d: any) => (
                         <tr key={d.department}>
-                          <td className="font-bold">{d.department}</td>
-                          <td>{d.approvedLeaves}</td>
+                          <td className="font-bold" data-label="Department">{d.department}</td>
+                          <td data-label="Approved Leaves (YTD)">{d.approvedLeaves}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -282,28 +317,45 @@ export const HRDashboard: React.FC = () => {
             
             {activeTab === 'ledger' && (
               <div className="glass-card-body p-0">
-                <div className="data-table-wrapper">
-                  <table className="data-table">
+                <div className="md:hidden space-y-3 p-3">
+                  {ledger.map((r: any) => <article key={r.id} className="mobile-ledger-card rounded-xl border border-border bg-base/40 p-4">
+                    <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="font-bold break-words">{r.employeeName}</div><div className="text-xs text-muted">{r.employeeID} · {r.leaveTypeCode}</div></div><span className="badge badge-pending shrink-0">{r.status}</span></div>
+                    <div className="grid grid-cols-2 gap-3 mt-4 text-xs"><div><span className="text-muted block">Date filed</span><strong>{new Date(r.dateFiled).toLocaleDateString()}</strong></div><div><span className="text-muted block">Leave dates</span><strong>{new Date(r.dateFrom).toLocaleDateString()} – {new Date(r.dateTo).toLocaleDateString()}</strong></div></div>
+                    {r.reason && <p className="text-sm mt-3 line-clamp-2">{r.reason}</p>}
+                    <div className="grid grid-cols-2 gap-2 mt-4" onClick={event=>event.stopPropagation()}><button className="btn btn-outline btn-sm" onClick={()=>handleViewRequest(r)}><Eye size={14}/> View details</button>{r.dateProcessed?<div className="text-xs text-success flex items-center justify-center">Processed</div>:<button className="btn btn-primary btn-sm" onClick={()=>handleFinalizeClick(r)}>Finalize</button>}</div>
+                  </article>)}
+                  {ledger.length===0&&<div className="empty-state py-8">No requests to finalize.</div>}
+                </div>
+                <div className="data-table-wrapper hidden md:block">
+                  <table className="data-table mobile-record-table" role="table">
                     <thead>
                       <tr>
-                        <th>Employee</th>
-                        <th>Type</th>
-                        <th>Dates</th>
-                        <th>Status</th>
-                        <th>HR Processing</th>
+                        <th scope="col">Employee</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Date Filed</th>
+                        <th scope="col">Leave Dates</th>
+                        <th scope="col">Duration</th>
+                        <th scope="col">Reason</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">HR Processing</th>
                       </tr>
                     </thead>
                     <tbody>
                       {ledger.map((r: any) => (
-                        <tr key={r.id}>
-                          <td>
+                        <tr key={r.id} onClick={() => handleViewRequest(r)} className="cursor-pointer" title="Click to view request details">
+                          <td data-label="Employee">
                             <div className="font-bold">{r.employeeName}</div>
                             <div className="text-xs text-muted">{r.employeeID}</div>
                           </td>
-                          <td><span className="font-bold">{r.leaveTypeCode}</span></td>
-                          <td>{new Date(r.dateFrom).toLocaleDateString()} - {new Date(r.dateTo).toLocaleDateString()}</td>
-                          <td><span className="badge badge-pending">{r.status}</span></td>
-                          <td>
+                          <td data-label="Type"><span className="font-bold">{r.leaveTypeCode}</span></td>
+                          <td className="whitespace-nowrap" data-label="Date Filed">{new Date(r.dateFiled).toLocaleDateString()}</td>
+                          <td data-label="Leave Dates">{new Date(r.dateFrom).toLocaleDateString()} - {new Date(r.dateTo).toLocaleDateString()}</td>
+                          <td className="whitespace-nowrap" data-label="Duration">{formatRequestDuration(r)}</td>
+                          <td className="max-w-[240px] truncate" title={r.reason} data-label="Reason">{r.reason || '—'}</td>
+                          <td data-label="Status"><span className="badge badge-pending">{r.status}</span></td>
+                          <td data-label="HR Processing">
+                            <div className="flex gap-2" onClick={event => event.stopPropagation()}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => handleViewRequest(r)}><Eye size={14} /> View</button>
                             {r.dateProcessed ? (
                               <div className="text-xs text-success">Processed</div>
                             ) : (
@@ -311,12 +363,13 @@ export const HRDashboard: React.FC = () => {
                                 Finalize
                               </button>
                             )}
+                            </div>
                           </td>
                         </tr>
                       ))}
                       {ledger.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="text-center p-8 text-muted">No requests to finalize.</td>
+                          <td colSpan={8} className="text-center p-8 text-muted">No requests to finalize.</td>
                         </tr>
                       )}
                     </tbody>
@@ -328,38 +381,43 @@ export const HRDashboard: React.FC = () => {
             {activeTab === 'company-pending' && (
               <div className="glass-card-body p-0">
                 <div className="data-table-wrapper">
-                  <table className="data-table">
+                  <table className="data-table mobile-record-table" role="table">
                     <thead>
                       <tr>
-                        <th>Employee</th>
-                        <th>Type</th>
-                        <th>Dates</th>
-                        <th>Duration</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th scope="col">Employee</th>
+                        <th scope="col">Type</th>
+                        <th scope="col">Date Filed</th>
+                        <th scope="col">Leave Dates</th>
+                        <th scope="col">Duration</th>
+                        <th scope="col">Reason</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {companyPending.map((r: any) => (
-                        <tr key={r.id}>
-                          <td>
+                        <tr key={r.leaveRequestId || r.id} onClick={() => handleViewRequest(r)} className="cursor-pointer" title="Click to view request details">
+                          <td data-label="Employee">
                             <div className="font-bold">{r.employeeName}</div>
-                            <div className="text-xs text-muted">{r.department}</div>
+                            <div className="text-xs text-muted">{r.employeeID || r.department}</div>
                           </td>
-                          <td><span className="font-bold">{r.leaveTypeCode}</span></td>
-                          <td>{new Date(r.dateFrom).toLocaleDateString()} - {new Date(r.dateTo).toLocaleDateString()}</td>
-                          <td>{r.totalHours > 0 ? `${r.totalHours} hrs` : `${r.totalDays} days`}</td>
-                          <td><span className="badge badge-pending">{r.status}</span></td>
-                          <td>
-                            <button className="btn btn-outline btn-sm" onClick={() => navigate(`/leave/${r.id}`)}>
-                              View
+                          <td data-label="Type"><span className="font-bold">{r.leaveTypeCode}</span></td>
+                          <td className="whitespace-nowrap" data-label="Date Filed">{new Date(r.dateFiled).toLocaleDateString()}</td>
+                          <td data-label="Leave Dates">{new Date(r.dateFrom).toLocaleDateString()} - {new Date(r.dateTo).toLocaleDateString()}</td>
+                          <td className="whitespace-nowrap" data-label="Duration">{formatRequestDuration(r)}</td>
+                          <td className="max-w-[240px] truncate" title={r.reason} data-label="Reason">{r.reason || '—'}</td>
+                          <td data-label="Status"><span className="badge badge-pending">{r.status}</span></td>
+                          <td onClick={event => event.stopPropagation()} data-label="Actions">
+                            <button className="btn btn-outline btn-sm" onClick={() => handleViewRequest(r)}>
+                              <Eye size={14} /> View
                             </button>
+                            <button className="btn btn-outline btn-sm ml-2" onClick={() => void handleNotifyApprover(r.leaveRequestId || r.id)} title="Notify current approver"><BellRing size={14} /> Notify Approver</button>
                           </td>
                         </tr>
                       ))}
                       {companyPending.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="text-center p-8 text-muted">No pending requests found.</td>
+                          <td colSpan={8} className="text-center p-8 text-muted">No pending requests found.</td>
                         </tr>
                       )}
                     </tbody>
@@ -367,141 +425,10 @@ export const HRDashboard: React.FC = () => {
                 </div>
               </div>
             )}
-            {activeTab === 'balances' && (
-              <div className="grid grid-cols-1 lg:grid-cols-[minmax(520px,0.9fr)_minmax(420px,1.1fr)] gap-6 items-start">
-                {/* Left Panel: Employee List */}
-                <div className="glass-card flex flex-col">
-                  <div className="glass-card-header border-b border-border" style={{ padding: '32px 32px 24px 32px' }}>
-                    <h2 className="flex items-center gap-2 font-bold text-lg"><Users size={18} className="text-primary" /> Employee Balances</h2>
-                  </div>
-                  
-                  <div className="border-b border-border bg-base flex flex-col md:flex-row gap-4 shrink-0" style={{ padding: '24px 32px' }}>
-                    <input 
-                      type="text" 
-                      placeholder="Search employee..." 
-                      className="form-input flex-1"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                    />
-                    <select 
-                      className="form-select flex-1 md:max-w-[240px]"
-                      value={deptFilter}
-                      onChange={e => setDeptFilter(e.target.value)}
-                    >
-                      <option value="">All Departments</option>
-                      {Array.from(new Set(balances.map(b => b.department).filter(Boolean))).map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col gap-4 overflow-y-auto max-h-[700px] lg:max-h-[800px]" style={{ padding: '32px' }}>
-                    {balances.filter(b => 
-                      ((b.fullName || '').toLowerCase().includes(searchQuery.toLowerCase()) || (b.employeeID || '').toLowerCase().includes(searchQuery.toLowerCase())) &&
-                      (deptFilter === '' || (b.department || '') === deptFilter)
-                    ).map((b: any) => {
-                      const totalUsed = b.balances?.reduce((acc: number, curr: any) => acc + curr.used, 0) || 0;
-                      const totalPending = b.balances?.reduce((acc: number, curr: any) => acc + curr.pending, 0) || 0;
-                      const totalAvailable = b.balances?.reduce((acc: number, curr: any) => acc + curr.available, 0) || 0;
-                      const isSelected = selectedEmployee?.id === b.id;
-
-                      return (
-                        <div 
-                          key={b.id} 
-                          className={`glass-card flex flex-col gap-3 transition-colors cursor-pointer ${isSelected ? 'border-primary ring-1 ring-primary' : 'hover:border-border-active'}`}
-                          onClick={() => setSelectedEmployee(b)}
-                          style={{ padding: '24px' }}
-                        >
-                          <div>
-                            <div className="font-bold text-lg text-text-primary">{b.fullName.toUpperCase()}</div>
-                            <div className="text-sm text-muted">{b.department} | ID: {b.employeeID}</div>
-                          </div>
-                          
-                          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm bg-base/50 p-3 rounded-md border border-border/50">
-                            <div><span className="text-muted">Available:</span> <span className="font-bold text-success ml-1">{totalAvailable}</span></div>
-                            <div><span className="text-muted">Used:</span> <span className="font-bold text-danger ml-1">{totalUsed}</span></div>
-                            <div><span className="text-muted">Pending:</span> <span className="font-bold text-warning ml-1">{totalPending}</span></div>
-                            <div><span className="text-muted">Projected:</span> <span className="font-bold text-primary ml-1">{totalAvailable - totalPending}</span></div>
-                          </div>
-                          
-                          <div className="flex gap-2 mt-2">
-                            <button className="btn btn-primary flex-1 min-h-[40px]" onClick={(e) => { e.stopPropagation(); setViewingEmployee(b); }}>
-                              <Eye size={16} /> View Details
-                            </button>
-                            <button className="btn btn-outline min-h-[40px] flex-1" onClick={(e) => { e.stopPropagation(); handleEditClick(b); }}>
-                              <Edit2 size={16} /> Edit
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {balances.filter(b => 
-                      ((b.fullName || '').toLowerCase().includes(searchQuery.toLowerCase()) || (b.employeeID || '').toLowerCase().includes(searchQuery.toLowerCase())) &&
-                      (deptFilter === '' || (b.department || '') === deptFilter)
-                    ).length === 0 && (
-                      <div className="text-center p-8 text-muted border border-dashed border-border rounded-lg">No employees found.</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Panel: Detail summary */}
-                <div className="hidden lg:block sticky top-6">
-                  {selectedEmployee ? (
-                    <div className="glass-card flex flex-col border-primary">
-                      <div className="glass-card-header flex justify-between items-center p-4 border-b border-border bg-base/50">
-                        <h2 className="flex items-center gap-2 font-bold text-lg"><User size={18} className="text-primary" /> Employee Summary</h2>
-                        <button className="modal-close" onClick={() => setSelectedEmployee(null)}><X size={18} /></button>
-                      </div>
-                      <div className="glass-card-body p-6">
-                        <div className="text-center mb-6">
-                          <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold">
-                            {selectedEmployee.fullName.charAt(0).toUpperCase()}
-                          </div>
-                          <h3 className="text-xl font-bold text-text-primary">{selectedEmployee.fullName.toUpperCase()}</h3>
-                          <p className="text-muted">{selectedEmployee.department} | {selectedEmployee.employeeID}</p>
-                        </div>
-                        
-                        <h4 className="font-bold text-sm text-text-secondary uppercase tracking-wider mb-3">Leave Balances</h4>
-                        <div className="flex flex-col gap-3">
-                          {selectedEmployee.balances?.map((bal: any) => (
-                            <div key={bal.leaveTypeCode} className="bg-base/30 p-3 rounded-lg border border-border/50 flex justify-between items-center">
-                              <div>
-                                <div className="font-bold text-primary">{bal.leaveTypeCode}</div>
-                                <div className="text-xs text-muted">{bal.totalCredits} Total Credits</div>
-                              </div>
-                              <div className="text-right">
-                                <div className="font-bold text-lg">{bal.available} <span className="text-xs text-muted font-normal">Avail</span></div>
-                                <div className="text-xs text-muted">{bal.used} Used | {bal.pending} Pend</div>
-                              </div>
-                            </div>
-                          ))}
-                          {(!selectedEmployee.balances || selectedEmployee.balances.length === 0) && (
-                            <p className="text-sm text-muted">No balances recorded.</p>
-                          )}
-                        </div>
-                        
-                        <div className="mt-8 flex flex-col gap-3">
-                          <button className="btn btn-primary w-full min-h-[44px]" onClick={() => setViewingEmployee(selectedEmployee)}>
-                            <Eye size={18} /> Open Full Details
-                          </button>
-                          <button className="btn btn-outline w-full min-h-[44px]" onClick={() => handleEditClick(selectedEmployee)}>
-                            <Edit2 size={18} /> Edit Balances
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="empty-state-card glass-card flex flex-col items-center justify-center p-8 text-center border-dashed min-h-[400px]">
-                      <Users size={48} className="text-muted mb-4 opacity-50" />
-                      <h3 className="mb-2 text-text-primary">Select an employee</h3>
-                      <p className="text-muted">Click on an employee card from the list to view their leave balance summary.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
             {activeTab === 'reports' && (
-              <div className="glass-card-body p-8 text-center" style={{ overflow: 'hidden' }}>
+              <div>
+                <ReportDesigner />
+                <div className="glass-card-body p-8 text-center" style={{ overflow: 'hidden' }}>
                 <FileBarChart size={48} className="text-muted mx-auto mb-4" />
                 <h3>Analytics Dashboard</h3>
                 <p className="text-muted">Generate comprehensive Excel reports and view department summaries.</p>
@@ -526,6 +453,7 @@ export const HRDashboard: React.FC = () => {
                 <div className="mt-8 flex justify-center">
                   <button className="btn btn-outline min-h-[44px]" onClick={() => navigate('/departments')}>View Department Summary</button>
                 </div>
+                </div>
               </div>
             )}
           </div>
@@ -533,82 +461,79 @@ export const HRDashboard: React.FC = () => {
       </div>
 
       {/* Detail Modal */}
-      {viewingEmployee && (
-        <EmployeeLeaveDetail employee={viewingEmployee} onClose={() => setViewingEmployee(null)} />
-      )}
-
-      {/* Edit Balance Modal */}
-      {editingEmployee && (
-        <div className="modal-overlay">
-          <div className="modal-backdrop" onClick={() => setEditingEmployee(null)} />
-          <div className="modal-content animate-slide-up">
+      {overviewModal && (
+        <DialogOverlay onClose={() => setOverviewModal(null)} label={overviewModal.title} closeOnBackdrop closeOnEscape>
+          <div className="modal-content animate-slide-up" style={{ maxWidth: 900 }}>
             <div className="modal-header">
-              <h2>Edit Balances: {editingEmployee.fullName}</h2>
-              <button className="modal-close" onClick={() => setEditingEmployee(null)}><X size={20} /></button>
+              <div><h2>{overviewModal.title}</h2><p className="text-xs text-muted mt-1">{overviewModal.items.length} record{overviewModal.items.length === 1 ? '' : 's'} found</p></div>
+              <button className="modal-close" aria-label={`Close ${overviewModal.title}`} onClick={() => setOverviewModal(null)}><X size={20} /></button>
             </div>
-            <form onSubmit={handleEditSubmit}>
-              <div className="form-group">
-                <label className="form-label">Leave Type</label>
-                <select 
-                  className="form-select" 
-                  value={editForm.leaveTypeId} 
-                  onChange={e => handleLeaveTypeChange(Number(e.target.value))}
-                >
-                  {leaveTypes.map(lt => (
-                    <option key={lt.id} value={lt.id}>{lt.code} - {lt.description}</option>
-                  ))}
-                </select>
+            {overviewModalLoading ? <div className="p-10 text-center"><div className="spinner" /></div> : overviewModal.items.length === 0 ? (
+              <div className="p-10 text-center text-muted">No records found for this overview.</div>
+            ) : overviewModal.kind === 'low-balance' ? (
+              <div className="data-table-wrapper" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                <table className="data-table mobile-record-table" role="table"><thead><tr><th scope="col">Employee</th><th scope="col">Department</th><th scope="col">Low Leave Balances</th><th scope="col">Action</th></tr></thead>
+                  <tbody>{overviewModal.items.map((employee: any) => <tr key={employee.id}>
+                    <td data-label="Employee"><strong>{employee.fullName}</strong><div className="text-xs text-muted">{employee.employeeID}</div></td>
+                    <td data-label="Department">{employee.department || '—'}</td>
+                    <td data-label="Low Leave Balances">{employee.balances?.filter((balance: any) => Number(balance.totalCredits) + Number(balance.carryOver) > 0 && Number(balance.available) < 3).map((balance: any) => <span key={balance.leaveTypeCode} className="badge badge-pending mr-1">{balance.leaveTypeCode}: {balance.available}</span>)}</td>
+                    <td data-label="Action"><button className="btn btn-outline btn-sm" onClick={() => { setOverviewModal(null); navigate('/hr/employment-status'); }}><Eye size={14} /> View</button></td>
+                  </tr>)}</tbody>
+                </table>
               </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Total Credits (Current Year)</label>
-                  <input 
-                    type="number" 
-                    step="0.5" 
-                    className="form-input" 
-                    value={editForm.totalCredits} 
-                    onChange={e => setEditForm({...editForm, totalCredits: Number(e.target.value)})} 
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Carry Over (From Last Year)</label>
-                  <input 
-                    type="number" 
-                    step="0.5" 
-                    className="form-input" 
-                    value={editForm.carryOver} 
-                    onChange={e => setEditForm({...editForm, carryOver: Number(e.target.value)})} 
-                  />
-                </div>
+            ) : (
+              <div className="data-table-wrapper" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+                <table className="data-table mobile-record-table" role="table"><thead><tr><th scope="col">Employee</th><th scope="col">Type</th><th scope="col">Date Filed</th><th scope="col">Leave Dates</th><th scope="col">Reason</th><th scope="col">Status</th><th scope="col">Action</th></tr></thead>
+                  <tbody>{overviewModal.items.map((request: any) => <tr key={request.leaveRequestId || request.id} className="cursor-pointer" onClick={() => { setOverviewModal(null); void handleViewRequest(request); }}>
+                    <td data-label="Employee"><strong>{request.employeeName}</strong><div className="text-xs text-muted">{request.employeeID || request.department}</div></td>
+                    <td data-label="Type"><strong>{request.leaveTypeCode}</strong></td>
+                    <td className="whitespace-nowrap" data-label="Date Filed">{new Date(request.dateFiled).toLocaleDateString()}</td>
+                    <td className="whitespace-nowrap" data-label="Leave Dates">{new Date(request.dateFrom).toLocaleDateString()} – {new Date(request.dateTo).toLocaleDateString()}</td>
+                    <td className="max-w-[180px] truncate" title={request.reason} data-label="Reason">{request.reason || '—'}</td>
+                    <td data-label="Status"><span className="badge badge-pending">{request.status}</span></td>
+                    <td data-label="Action"><button className="btn btn-outline btn-sm" onClick={event => { event.stopPropagation(); setOverviewModal(null); void handleViewRequest(request); }}><Eye size={14} /> View</button></td>
+                  </tr>)}</tbody>
+                </table>
               </div>
-
-              <div className="form-group">
-                <label className="form-label">HR Remarks (Optional)</label>
-                <textarea 
-                  className="form-textarea" 
-                  rows={2} 
-                  value={editForm.hrRemarks} 
-                  onChange={e => setEditForm({...editForm, hrRemarks: e.target.value})} 
-                  placeholder="Reason for manual adjustment..." 
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 mt-6">
-                <button type="button" className="btn btn-outline" onClick={() => setEditingEmployee(null)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
+            )}
+            <div className="flex justify-end border-t border-border pt-4 mt-4"><button className="btn btn-outline" onClick={() => setOverviewModal(null)}>Close</button></div>
           </div>
-        </div>
+        </DialogOverlay>
       )}
+
+      {viewingRequest && (
+        <DialogOverlay onClose={() => setViewingRequest(null)} label="Leave request details" closeOnBackdrop closeOnEscape>
+          <div className="modal-content animate-slide-up" style={{ maxWidth: 760 }}>
+            <div className="modal-header">
+              <div><h2>Leave Request Details</h2><p className="text-xs text-muted mt-1">Review the request without leaving the HR list.</p></div>
+              <button className="modal-close" aria-label="Close request details" onClick={() => setViewingRequest(null)}><X size={20} /></button>
+            </div>
+            {viewingRequestLoading ? <div className="p-8 text-center"><div className="spinner" /></div> : (
+              <div className="space-y-5 overflow-y-auto min-h-0 pr-1 overscroll-contain">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-muted block text-xs">Employee</span><strong>{viewingRequest.employee?.fullName || viewingRequest.employeeName}</strong><div className="text-xs text-muted">{viewingRequest.employee?.employeeID || viewingRequest.employeeID}</div></div>
+                  <div><span className="text-muted block text-xs">Department</span><strong>{viewingRequest.employee?.department || viewingRequest.department || '—'}</strong></div>
+                  <div><span className="text-muted block text-xs">Date Filed</span><strong>{new Date(viewingRequest.dateFiled).toLocaleString()}</strong></div>
+                  <div><span className="text-muted block text-xs">Status</span><span className="badge badge-pending">{viewingRequest.status}</span></div>
+                  <div><span className="text-muted block text-xs">Leave Type</span><strong>{viewingRequest.leaveType?.code || viewingRequest.leaveTypeCode} — {viewingRequest.leaveType?.description || viewingRequest.leaveTypeDescription || ''}</strong>{viewingRequest.balanceDeductionLeaveType && <div>Deduct from: <strong>{viewingRequest.balanceDeductionLeaveType.code}</strong></div>}{(viewingRequest.leaveType?.code || viewingRequest.leaveTypeCode)?.toUpperCase() === 'UT' && <div className="text-warning">Unpaid UT — no leave deduction</div>}</div>
+                  <div><span className="text-muted block text-xs">Leave Dates</span><strong>{new Date(viewingRequest.dateFrom).toLocaleDateString()} – {new Date(viewingRequest.dateTo).toLocaleDateString()}</strong></div>
+                  <div><span className="text-muted block text-xs">{Number(viewingRequest.totalHours) > 0 ? 'Time of Leave' : 'Duration'}</span><strong>{Number(viewingRequest.totalHours) > 0 ? `${viewingRequest.halfDayTime || ''} · ${viewingRequest.totalHours} hours` : `${viewingRequest.totalDays} ${Number(viewingRequest.totalDays) === 1 ? 'day' : 'days'}`}</strong></div>
+                </div>
+                <div className="p-4 rounded-lg border border-border bg-base/40"><span className="text-muted block text-xs mb-1">Reason</span><p className="whitespace-pre-wrap">{viewingRequest.reason || 'No reason provided.'}</p></div>
+                <div><h3 className="mb-2">Attachments</h3>{viewingRequest.attachments?.length?<div className="grid sm:grid-cols-2 gap-2">{viewingRequest.attachments.map((attachment:any)=><button type="button" key={attachment.id} className="flex items-center gap-3 text-left p-3 rounded-lg border border-border bg-base/40 hover:border-primary min-w-0" onClick={()=>void handleViewAttachment(attachment)}><Paperclip size={17} className="text-primary shrink-0"/><span className="min-w-0"><strong className="block truncate">{attachment.fileName}</strong><small className="text-muted">{(attachment.fileSize/1024).toFixed(1)} KB · Tap to preview</small></span></button>)}</div>:<p className="text-sm text-muted p-3 rounded-lg border border-border">No attachments submitted.</p>}</div>
+                {viewingRequest.approvalSteps?.length > 0 && <div><h3 className="mb-2">Leave Progress</h3><div className="space-y-2">{viewingRequest.approvalSteps.map((step: any,index:number) => <div key={step.id || step.stepOrder} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 p-3 rounded-lg border border-border text-sm"><span className="w-8 h-8 rounded-full bg-primary/10 text-primary grid place-items-center font-bold">{index+1}</span><div className="min-w-0">{step.stageKind === 'RECOMMENDING' && <div className="text-xs font-semibold text-muted mb-1">Recommending By</div>}<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1"><strong>{approvalStageLabel(step.stepLabel, index)}</strong><span className={`badge ${step.action==='Approved'?'badge-success':step.action==='Disapproved'?'badge-danger':step.action==='Skipped'?'badge-cancelled':'badge-pending'} self-start`}>{step.action}</span></div><div className="text-muted mt-1 break-words">{step.approverName || 'Approver not assigned'}</div>{step.actionDate&&<div className="text-xs text-muted mt-1">{new Date(step.actionDate).toLocaleString()}</div>}</div></div>)}</div></div>}
+                <div className="flex justify-end border-t border-border pt-4"><button className="btn btn-outline" onClick={() => setViewingRequest(null)}>Close</button></div>
+              </div>
+            )}
+          </div>
+        </DialogOverlay>
+      )}
+
+      <AttachmentPreviewModal isOpen={Boolean(selectedAttachment)} onClose={closeAttachment} attachment={selectedAttachment} blobUrl={attachmentBlobUrl} />
 
       {/* Finalize Request Modal */}
       {finalizingRequest && (
-        <div className="modal-overlay">
-          <div className="modal-backdrop" onClick={() => setFinalizingRequest(null)} />
+        <DialogOverlay onClose={() => setFinalizingRequest(null)} label="Finalize leave request" closeOnBackdrop={!submitting} closeOnEscape={!submitting}>
           <div className="modal-content animate-slide-up">
             <div className="modal-header">
               <h2>Finalize Request</h2>
@@ -621,9 +546,11 @@ export const HRDashboard: React.FC = () => {
                 <p><strong>Dates:</strong> {new Date(finalizingRequest.dateFrom).toLocaleDateString()} - {new Date(finalizingRequest.dateTo).toLocaleDateString()}</p>
               </div>
               <div className="form-group">
-                <label className="form-label">Noted By (HR Staff)</label>
+                <label className="form-label" htmlFor="finalize-noted-by">Noted By (HR Staff)</label>
                 <input 
                   type="text" 
+                  id="finalize-noted-by"
+                  autoComplete="name"
                   className="form-input" 
                   value={finalizeForm.notedByHR} 
                   onChange={e => setFinalizeForm({...finalizeForm, notedByHR: e.target.value})} 
@@ -648,10 +575,8 @@ export const HRDashboard: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </DialogOverlay>
       )}
     </div>
   );
 };
-
-

@@ -3,10 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/app_icon.png?v=4" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="HIBLOW Philippines Inc. - Online Leave of Absence & Undertime Filing System" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Online Filing System for secure leave filing, approvals, and request tracking." />
+    <meta name="theme-color" content="#2563eb" />
+    <script>
+      (() => {
+        let preference = 'system';
+        try {
+          const saved = localStorage.getItem('onlinefs-theme');
+          if (saved === 'light' || saved === 'dark' || saved === 'system') preference = saved;
+        } catch {}
+        const light = window.matchMedia?.('(prefers-color-scheme: light)').matches ?? false;
+        const theme = preference === 'system' ? (light ? 'light' : 'dark') : preference;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'light' ? '#f5f7fb' : '#0a0e1a');
+      })();
+    </script>
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OnlineFS" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <title>HIBLOW - Leave Filing System</title>
+    <title>Online Filing System</title>
   </head>
   <body>
     <div id="root"></div>

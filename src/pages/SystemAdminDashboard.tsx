@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { HRAPI, SystemAdminAPI } from '../lib/api';
-import { Users, Shield, RefreshCw, ShieldAlert, ShieldCheck, UserCog, Database, Key, X } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { SystemAdminAPI, getApiErrorMessage, type HREmployee } from '../lib/api';
+import { Users, Shield, RefreshCw, ShieldAlert, ShieldCheck, UserCog, Database, Key, X, Search, UserPlus } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
+import { DialogOverlay } from '../components/ui/DialogOverlay';
 
 interface User {
   id: number;
@@ -9,19 +10,19 @@ interface User {
   role: string;
 }
 
-interface Employee {
-  id: number;
-  employeeID: string;
-  fullName: string;
-  orgRole: string;
-  department: string;
-}
-
 export const SystemAdminDashboard: React.FC = () => {
   const toast = useToast();
   const [users, setUsers] = useState<User[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [employees, setEmployees] = useState<HREmployee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [employeeSearch, setEmployeeSearch] = useState('');
+  const [createUserModalOpen, setCreateUserModalOpen] = useState(false);
+  const [createUsername, setCreateUsername] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [createRole, setCreateRole] = useState<'SystemAdmin' | 'Admin' | 'Editor'>('Admin');
+  const [createError, setCreateError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [selectedUserForPassword, setSelectedUserForPassword] = useState<User | null>(null);
@@ -32,7 +33,7 @@ export const SystemAdminDashboard: React.FC = () => {
     try {
       const [usersData, employeesData] = await Promise.all([
         SystemAdminAPI.getUsers(),
-        HRAPI.getEmployees()
+        SystemAdminAPI.getEmployeeDirectory()
       ]);
       setUsers(usersData);
       setEmployees(employeesData);
@@ -46,6 +47,37 @@ export const SystemAdminDashboard: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const filteredEmployees = useMemo(() => {
+    const query = employeeSearch.trim().toLocaleLowerCase();
+    if (!query) return employees;
+    return employees.filter(employee => [
+      employee.employeeID, employee.fullName, employee.department, employee.section,
+      employee.position, employee.orgRole, employee.employmentStatus,
+      employee.supervisorName, employee.managerName
+    ].some(value => value?.toLocaleLowerCase().includes(query)));
+  }, [employeeSearch, employees]);
+
+  const openCreateUser = () => {
+    setCreateUsername(''); setCreatePassword(''); setConfirmPassword('');
+    setCreateRole('Admin'); setCreateError(''); setCreateUserModalOpen(true);
+  };
+
+  const handleCreateUser = async (event: React.FormEvent) => {
+    event.preventDefault(); setCreateError('');
+    if (createUsername.trim().length < 3) return setCreateError('Username must contain at least 3 characters.');
+    if (createPassword.length < 8) return setCreateError('Password must contain at least 8 characters.');
+    if (createPassword !== confirmPassword) return setCreateError('Passwords do not match.');
+    setSubmitting(true);
+    try {
+      const created = await SystemAdminAPI.createUser({ username: createUsername.trim(), password: createPassword, role: createRole });
+      setUsers(current => [...current, created]);
+      toast.success(`${createRole} account '${created.username}' created successfully.`);
+      setCreateUserModalOpen(false);
+    } catch (error) {
+      setCreateError(getApiErrorMessage(error, 'Failed to create administrator account.'));
+    } finally { setSubmitting(false); }
+  };
 
   const handleUserRoleChange = async (userId: number, newRole: string) => {
     try {
@@ -138,7 +170,10 @@ export const SystemAdminDashboard: React.FC = () => {
                 <Database size={20} className="text-primary" />
                 <h2>Backend System Accounts</h2>
               </div>
-              <span className="badge badge-draft">{users.length} Users</span>
+              <div className="flex items-center gap-2">
+                <span className="badge badge-draft">{users.length} Users</span>
+                <button className="btn btn-primary btn-sm" onClick={openCreateUser}><UserPlus size={14} /> Add Admin</button>
+              </div>
             </div>
             <div className="glass-card-body p-0">
               <div className="data-table-wrapper">
@@ -199,6 +234,19 @@ export const SystemAdminDashboard: React.FC = () => {
               <span className="badge badge-draft">{employees.length} Employees</span>
             </div>
             <div className="glass-card-body p-0">
+              <div className="p-3 border-b border-border">
+                <div className="relative">
+                  <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                  <input
+                    className="form-input w-full pl-9"
+                    value={employeeSearch}
+                    onChange={event => setEmployeeSearch(event.target.value)}
+                    placeholder="Search ID, name, department, position, section, role, status, supervisor..."
+                    aria-label="Search employees by details"
+                  />
+                </div>
+                <div className="text-[11px] text-muted mt-2">Showing {filteredEmployees.length} of {employees.length} employees</div>
+              </div>
               <div className="data-table-wrapper" style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 <table className="data-table">
                   <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-card)', zIndex: 10 }}>
@@ -211,7 +259,7 @@ export const SystemAdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.map((e: any) => (
+                    {filteredEmployees.map(e => (
                       <tr key={e.id}>
                         <td className="font-mono text-xs opacity-70">{e.employeeID}</td>
                         <td className="font-medium">{e.fullName}</td>
@@ -233,6 +281,7 @@ export const SystemAdminDashboard: React.FC = () => {
                         </td>
                       </tr>
                     ))}
+                    {filteredEmployees.length === 0 && <tr><td colSpan={5} className="text-center py-10 text-muted">No employees match “{employeeSearch}”.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -240,6 +289,25 @@ export const SystemAdminDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {createUserModalOpen && (
+        <DialogOverlay onClose={() => !submitting && setCreateUserModalOpen(false)} label="Add administrator account" closeOnEscape={!submitting} closeOnBackdrop={!submitting}>
+          <div className="modal-content glass-card w-full max-w-md p-6 space-y-4">
+            <div className="modal-header">
+              <div><h2 className="flex items-center gap-2"><UserPlus size={19} className="text-primary" /> Add Administrator</h2><p className="text-xs text-muted mt-1">Create a separate secured backend account.</p></div>
+              <button className="modal-close" aria-label="Close" disabled={submitting} onClick={() => setCreateUserModalOpen(false)}><X size={18} /></button>
+            </div>
+            {createError && <div className="alert alert-danger text-xs">{createError}</div>}
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <div><label className="form-label">Username *</label><input className="form-input w-full" value={createUsername} onChange={event => setCreateUsername(event.target.value)} minLength={3} maxLength={64} autoComplete="off" disabled={submitting} required /></div>
+              <div><label className="form-label">Account Role *</label><select className="form-select w-full" value={createRole} onChange={event => setCreateRole(event.target.value as typeof createRole)} disabled={submitting}><option value="Admin">Admin</option><option value="SystemAdmin">System Administrator</option><option value="Editor">Editor</option></select><p className="text-[11px] text-muted mt-1">Admin manages the application. System Administrator can also manage accounts and roles.</p></div>
+              <div><label className="form-label">Password *</label><input type="password" className="form-input w-full" value={createPassword} onChange={event => setCreatePassword(event.target.value)} minLength={8} autoComplete="new-password" disabled={submitting} required /></div>
+              <div><label className="form-label">Confirm Password *</label><input type="password" className="form-input w-full" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} minLength={8} autoComplete="new-password" disabled={submitting} required /></div>
+              <div className="flex justify-end gap-2 pt-3 border-t border-border"><button type="button" className="btn btn-outline" disabled={submitting} onClick={() => setCreateUserModalOpen(false)}>Cancel</button><button type="submit" className="btn btn-primary" disabled={submitting}>{submitting ? 'Creating…' : 'Create Account'}</button></div>
+            </form>
+          </div>
+        </DialogOverlay>
+      )}
 
       {passwordModalOpen && selectedUserForPassword && (
         <div 
@@ -265,7 +333,7 @@ export const SystemAdminDashboard: React.FC = () => {
               <div className="form-group" style={{ marginBottom: '24px' }}>
                 <label className="form-label text-xs font-bold uppercase tracking-wide text-muted block" style={{ marginBottom: '8px' }}>New Password</label>
                 <input
-                  type="text"
+                  type="password"
                   className="form-input w-full"
                   style={{ background: 'var(--bg-secondary)', padding: '12px 16px', fontSize: '14px' }}
                   value={newPassword}

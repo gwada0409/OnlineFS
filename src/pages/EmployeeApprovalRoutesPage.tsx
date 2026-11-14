@@ -3,6 +3,7 @@ import { ApprovalRouteAPI, HRAPI } from '../lib/api';
 import { GitMerge, Plus, Trash2, X, Search, CheckCircle, RotateCcw, UserCheck } from 'lucide-react';
 import { useToast } from '../components/ToastProvider';
 import { useConfirm } from '../components/ConfirmDialog';
+import { DialogOverlay } from '../components/ui/DialogOverlay';
 
 export const EmployeeApprovalRoutesPage: React.FC = () => {
   const toast = useToast();
@@ -217,7 +218,7 @@ export const EmployeeApprovalRoutesPage: React.FC = () => {
 
       {/* Add Route Step Modal */}
       {showAddForm && (
-        <div className="modal-overlay">
+        <DialogOverlay onClose={() => setShowAddForm(false)} label="Add approval step" closeOnBackdrop>
           <div className="modal-content">
             <div className="modal-header">
               <h3>Add Approval Step</h3>
@@ -252,7 +253,7 @@ export const EmployeeApprovalRoutesPage: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </DialogOverlay>
       )}
     </div>
   );

@@ -1,0 +1,28 @@
+.approval-mobile-list { display: none; }
+
+@media (width < 768px) {
+  .approval-desktop-table { display: none; }
+  .approval-mobile-list { display: grid; gap: 12px; padding: 12px; min-width: 0; }
+  .glass-card-body > .approval-mobile-list { padding: 0; }
+  .approval-request-card { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-card); cursor: pointer; overflow-wrap: anywhere; }
+  .approval-card-heading { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+  .approval-card-heading h3 { flex: 1; min-width: 0; margin: 0; font-size: 16px; line-height: 1.5; }
+  .approval-card-title { display: block; width: 100%; padding: 0; border: 0; background: transparent; color: var(--text-primary); font: inherit; font-weight: 700; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+  .approval-card-type { flex-shrink: 0; max-width: 40%; }
+  .approval-card-stage { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .approval-request-card .badge { white-space: normal; max-width: 100%; }
+  .approval-request-card .btn { width: 100%; margin: 0; min-height: 44px; }
+  .approval-card-primary { min-height: 48px !important; }
+  .approval-card-decisions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .approval-card-decisions .btn { padding: 10px 8px; font-size: 14px; }
+  .approval-card-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; font-size: 14px; }
+  .approval-card-metadata > div { min-width: 0; }
+  .approval-card-metadata dt { margin-bottom: 4px; color: var(--text-muted); font-size: 12px; }
+  .approval-card-metadata dd { margin: 0; color: var(--text-primary); }
+  .approval-card-wide { grid-column: 1 / -1; }
+  .approval-card-secondary { border-top: 1px solid var(--border); padding-top: 4px; cursor: default; }
+  .approval-card-secondary summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--primary); cursor: pointer; font-size: 14px; }
+  .approval-card-secondary summary::after { content: '+'; font-size: 20px; }
+  .approval-card-secondary[open] summary::after { content: '−'; }
+  .approval-card-secondary > div { display: grid; gap: 12px; padding-top: 8px; }
+}

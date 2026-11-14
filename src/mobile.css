@@ -1,0 +1,151 @@
+/* Mobile overrides are deliberately isolated from the existing >=768px styles. */
+@media (width < 768px) {
+  html, body, #root { min-height: 100dvh; max-width: 100%; }
+  html { scroll-padding-block: 72px 160px; }
+  #root { overflow-x: clip; }
+  body { font-size: 16px; }
+  .app-layout { min-height: 100dvh; overflow-x: clip; --mobile-nav-height: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  .main-content { min-width: 0; min-height: 100dvh; padding-top: env(safe-area-inset-top, 0px); padding-bottom: var(--mobile-nav-height); }
+  .app-layout:not(.tutorial-running) .sidebar, .app-layout:not(.tutorial-running) .menu-toggle { display: none; }
+  .main-header { top: env(safe-area-inset-top, 0px); height: 60px; min-height: 60px; padding: 8px 16px !important; gap: 12px; }
+  .main-header-title { min-width: 0; flex: 1; }
+  .main-header-title > span { font-size: 14px; }
+  .main-header-controls { flex: 0 0 auto; gap: 8px; }
+  .main-header-controls > .tutorial-launcher,
+  .main-header-controls > .theme-preference,
+  .main-header-controls > [aria-label^="Current role"] { display: none; }
+  .page-container { padding: 16px; }
+  .page-container > *, .page-body, .glass-card, .glass-card-body, .form-group, .form-row > *, .timeline-content { min-width: 0; max-width: 100%; }
+  .page-container .page-header { position: static; padding: 0 0 20px; margin-bottom: 20px; background: none; backdrop-filter: none; }
+  .page-container .page-header h1 { font-size: 22px; line-height: 1.3; }
+  .page-header p { font-size: 14px; line-height: 1.6; }
+  .page-body { padding: 0; }
+  .glass-card-body, .glass-card-header { padding: 16px; }
+  .glass-card-header { gap: 12px; }
+  .glass-card-header h2 { line-height: 1.4; }
+  .page-container :where(p, strong, dd, .timeline-label, .timeline-meta) { overflow-wrap: anywhere; }
+  .page-container .text-xs, .modal-content .text-xs { font-size: 14px; line-height: 1.5; }
+  :where(button, a[href], [role="button"], [role="checkbox"], summary) { min-width: 44px; min-height: 44px; touch-action: manipulation; }
+  a[href] { display: inline-flex; align-items: center; max-width: 100%; }
+  :where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+  .btn, .btn-sm, .btn-ghost, .modal-close { min-width: 44px; min-height: 44px; }
+  .btn { white-space: normal; text-align: center; justify-content: center; gap: 8px; }
+  :where(input:not([type="hidden"]), select, textarea), .form-input, .form-select, .form-textarea { min-height: 48px; max-width: 100%; font-size: 16px !important; }
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea { min-width: 0; }
+  .form-input, .form-select, .form-textarea { width: 100%; }
+  .form-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .form-label { line-height: 1.5; }
+  .form-hint { font-size: 14px; }
+  .mobile-form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .mobile-actions { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+  .mobile-actions > .btn { width: 100%; margin-inline: 0; }
+  .mobile-bottom-nav { position: fixed; inset: auto 0 0; z-index: 80; display: flex; justify-content: space-around; gap: 8px; padding: 8px max(8px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); border-top: 1px solid var(--border); background: var(--bg-card); box-shadow: 0 -4px 20px rgb(0 0 0 / 8%); }
+  .mobile-bottom-nav button { flex: 1; min-width: 0; min-height: 56px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 4px; padding: 4px 0; border: 0; border-radius: 12px; color: var(--text-secondary); background: transparent; font-size: 11px; font-weight: 600; line-height: 1.4; }
+  .mobile-bottom-nav button.active { color: var(--primary); background: var(--primary-light); }
+  .tutorial-running .mobile-bottom-nav { visibility: hidden; }
+  .mobile-navigation-sheet { gap: 20px; }
+  .mobile-navigation-sheet .modal-header { margin: 0; }
+  .mobile-workspaces { display: grid; gap: 20px; }
+  .mobile-workspaces section { display: grid; gap: 8px; }
+  .mobile-workspaces h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+  .mobile-workspaces .nav-item { margin: 0; min-height: 48px; }
+  .mobile-account-settings { display: grid; gap: 12px; border-top: 1px solid var(--border); padding-top: 20px; }
+  .mobile-account-settings .form-label { margin: 0; }
+  .modal-overlay { align-items: flex-end; padding: 0; overflow: hidden; }
+  .modal-overlay > .modal-content, .modal-overlay > .confirm-dialog { width: 100%; max-width: 100% !important; max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px)) !important; margin: 0; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); border-radius: 24px 24px 0 0; overflow-y: auto; overscroll-behavior: contain; animation: mobile-sheet-enter 180ms ease-out; }
+  .reschedule-overlay { padding: 0 !important; }
+  .reschedule-overlay > .reschedule-panel { width: 100%; max-width: 100%; max-height: calc(100dvh - 16px); border-radius: 24px 24px 0 0; padding-bottom: env(safe-area-inset-bottom); overscroll-behavior: contain; }
+  .reschedule-panel > div:first-child, .reschedule-panel > form { padding: 16px; }
+  .reschedule-panel .flex.justify-end { flex-direction: column-reverse; gap: 12px; }
+  .reschedule-panel .flex.justify-end > .btn { width: 100%; }
+  .modal-header { gap: 12px; flex-shrink: 0; }
+  .modal-header > div { min-width: 0; }
+  .modal-header h2 { font-size: 18px; overflow-wrap: anywhere; }
+  .modal-close { position: static; flex: 0 0 44px; display: inline-flex; align-items: center; justify-content: center; padding: 8px; }
+  .modal-content > form, .modal-content > .overflow-y-auto { overflow: visible; }
+  .modal-content .flex.justify-end { flex-direction: column-reverse; gap: 12px; }
+  .modal-content .flex.justify-end > .btn { width: 100%; }
+  .notification-sheet { padding: 0 !important; overflow: hidden !important; gap: 0; }
+  .notification-sheet > .notification-preview-header,
+  .notification-sheet > .notification-preview-close,
+  .notification-sheet > .notification-preview-footer { flex: 0 0 auto; }
+  .notification-sheet .notification-preview-list { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+  .notification-sheet .notification-preview-header { flex-wrap: wrap; gap: 12px; }
+  .notification-sheet .notification-preview-header > button { padding-inline: 8px; }
+  .notification-sheet .notification-preview-close { padding-block: 12px; }
+  .notification-sheet .notification-preview-row { display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: start; gap: 12px; min-height: 72px; text-align: left; width: 100%; }
+  .notification-sheet .notification-preview-main { min-width: 0; max-width: 100%; }
+  .notification-sheet .notification-preview-heading { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .notification-sheet .notification-preview-title { display: block; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; font-size: 14px; line-height: 1.5; }
+  .notification-sheet .notification-preview-message { display: block; -webkit-line-clamp: unset; line-clamp: none; white-space: pre-wrap; overflow: visible; overflow-wrap: anywhere; margin-top: 4px; font-size: 14px; line-height: 1.6; }
+  .notification-sheet .notification-preview-time { white-space: normal; font-size: 12px; }
+  .notification-sheet .notification-preview-footer { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  /* Keep the table's semantic structure and headers; render each body row as a card. */
+  .data-table-wrapper:has(> .mobile-record-table) { margin: 0; padding: 0; overflow: visible; max-height: none !important; }
+  .mobile-record-table { display: block; width: 100%; min-width: 0 !important; border-collapse: separate; }
+  .mobile-record-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .mobile-record-table tbody { display: grid; gap: 12px; padding: 12px; }
+  .mobile-record-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-card); }
+  .mobile-record-table td { display: block; min-width: 0; max-width: 100%; padding: 0 !important; border: 0; white-space: normal; font-size: 14px; text-align: left; overflow-wrap: anywhere; }
+  .mobile-record-table td::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 12px; font-weight: 500; }
+  .mobile-record-table td:first-child { grid-column: 1 / -1; font-size: 16px; font-weight: 600; }
+  .mobile-record-table td:first-child::before, .mobile-record-table td[data-label="Status"]::before, .mobile-record-table td[data-label="Actions"]::before, .mobile-record-table td[data-label="Action"]::before { display: none; }
+  .mobile-record-table td[data-label="Status"] { grid-row: 2; grid-column: 1 / -1; }
+  .mobile-record-table td[data-label="Reason"] { grid-column: 1 / -1; max-width: 100%; overflow: visible; white-space: normal; }
+  .mobile-record-table td[data-label="Actions"], .mobile-record-table td[data-label="Action"], .mobile-record-table td[data-label="HR Processing"] { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--border); padding-top: 12px !important; }
+  .mobile-record-table td .btn { width: 100%; margin: 0; }
+  .mobile-record-table td[colspan] { grid-column: 1 / -1; font-weight: 400; }
+  .mobile-record-table td[colspan]::before { display: none; }
+  .mobile-record-table .badge { white-space: normal; max-width: 100%; }
+  .mobile-record-table .form-select { width: 100% !important; height: auto !important; margin: 0; }
+  .mobile-record-table td > .form-select + .form-select { margin-top: 12px; }
+  .mobile-record-table [role="checkbox"] { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-active); border-radius: 10px; background: var(--bg-input); color: var(--text-primary); }
+  .mobile-record-table [role="checkbox"][data-state="checked"] { border-color: var(--primary); background: var(--primary); color: white; }
+  .mobile-record-table [role="checkbox"] svg { width: 18px; height: 18px; }
+  .mobile-record-table label { min-height: 44px; display: inline-flex; align-items: center; }
+  .filing-page [data-tutorial="filing-stages"] button { min-height: 60px; display: flex; flex-direction: column; gap: 8px; padding: 8px 4px; font-size: 12px; }
+  .filing-page [data-tutorial="filing-stages"] button > span:last-child { display: inline; }
+  .filing-page .glass-card-header { flex-wrap: nowrap; align-items: flex-start; }
+  .filing-page .glass-card-header > div:first-child { width: 36px; flex: 0 0 36px; }
+  .filing-page .glass-card-header > div:last-child { width: auto; }
+  .filing-page [data-tutorial="filing-actions"] { position: sticky; bottom: calc(var(--mobile-nav-height) + 8px); z-index: 30; padding: 12px; background: var(--bg-card); box-shadow: var(--shadow-lg); }
+  .filing-page [data-tutorial="filing-actions"] .btn { width: 100%; min-width: 0; }
+  .filing-page .file-remove { opacity: 1; }
+  .filing-page .file-queue-row { flex-wrap: wrap; gap: 12px; }
+  .filing-page .file-queue-row > .file-queue-actions { width: 100%; justify-content: flex-end; }
+  .filing-page .review-attachments { flex-wrap: wrap; }
+  .filing-page .review-attachments > button { width: 100%; }
+  .detail-attachment { flex-wrap: wrap; gap: 12px; }
+  .detail-attachment > div { min-width: 0; max-width: 100%; }
+  .detail-attachment .attachment-name { overflow-wrap: anywhere; }
+  .detail-attachment > div:last-child { width: 100%; justify-content: space-between; }
+  .leave-detail-page .page-header > .btn { width: auto; }
+  .detail-attachment svg { flex-shrink: 0; }
+  .leave-detail-page .approval-timeline { padding: 16px 16px 16px 48px; }
+  .leave-detail-page .approval-timeline::before { left: 27px; }
+  .leave-detail-page .timeline-dot { left: -32px; }
+  .leave-detail-page .timeline-content { padding: 12px !important; }
+  .leave-detail-page .timeline-content .btn { width: 100%; }
+  .hr-page .hr-desktop-tabs { display: none; }
+  .hr-page .stat-card { min-height: 120px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 8px; }
+  .hr-page .stat-title { font-size: 14px; }
+  .hr-page .stat-value { font-size: 26px; font-weight: 700; line-height: 1.2; }
+  .hr-page .mobile-ledger-card { cursor: default; }
+  .hr-page .mobile-ledger-card > .grid:last-child { grid-template-columns: minmax(0, 1fr); }
+  .employee-hub .employee-hub-filters { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; gap: 12px; }
+  .employee-hub .employee-hub-filters > * { width: 100%; min-width: 0; }
+  .employee-hub .employee-hub-name { display: block; width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+  .employee-hub-table td[data-label="Employment Status"] { grid-column: 1 / -1; }
+  .employee-hub-table td[data-label="Employment Status"] select { min-width: 0; }
+  .employee-hub-table td[data-label="Actions"] > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .modal-overlay > .employee-leave-detail { width: 100% !important; }
+  .employee-leave-detail .employee-detail-name,
+  .employee-leave-detail .employee-detail-meta,
+  .employee-leave-detail .employee-ledger-remarks { max-width: 100%; white-space: normal; overflow: visible; overflow-wrap: anywhere; text-overflow: clip; }
+  .employee-leave-detail .employee-show-all { min-height: 44px; gap: 12px; }
+  .employee-leave-detail .employee-show-all input { width: 20px; height: 20px; min-height: 20px; flex-shrink: 0; }
+  .tutorial-invitation { flex-wrap: wrap; }
+  .tutorial-invitation > div { flex: 1 1 180px; }
+  .tutorial-invitation > .btn { flex: 1 1 100%; }
+  @keyframes mobile-sheet-enter { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+}

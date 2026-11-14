@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { AlertTriangle, Trash2, Info } from 'lucide-react';
+import { DialogOverlay } from './ui/DialogOverlay';
 
 // ── Types ───────────────────────────────────────────────────────
 interface ConfirmOptions {
@@ -50,8 +51,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmContext.Provider value={confirm}>
       {children}
       {state && (
-        <div className="modal-overlay" style={{ zIndex: 2000 }}>
-          <div className="modal-backdrop" onClick={handleCancel} />
+        <DialogOverlay onClose={handleCancel} label={state.options.title || (isDanger ? 'Confirm destructive action' : 'Confirm action')} description={state.options.message} style={{ zIndex: 2000 }}>
           <div className="confirm-dialog animate-slide-up">
             <div className="confirm-dialog-icon-wrap">
               <div className={`confirm-dialog-icon ${isDanger ? 'confirm-danger' : 'confirm-info'}`}>
@@ -77,7 +77,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               </button>
             </div>
           </div>
-        </div>
+        </DialogOverlay>
       )}
     </ConfirmContext.Provider>
   );

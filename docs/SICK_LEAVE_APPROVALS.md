@@ -1,0 +1,33 @@
+# Sick Leave review and grouped approval stages
+
+## Route and setup
+
+New SL requests use **HR Review → Noted by (optional) → Recommending → Approver**. The HR-first rule runs on the server and cannot be bypassed by an employee's custom route. HR Review appears as one shared HR stage, without listing individual HR members. Any current employee account whose organizational role is `HRStaff` or `HRManager` can act, excluding the filing employee. The completed stage displays the actual signer; underlying member rows remain for notifications and audit. Standalone Admin/SystemAdmin users are not employee signatories. Ensure HR employee accounts have working employee logins.
+
+Under **Departments → Edit Department / Team**, select optional **Noted by** members and one or more **Recommending** members. The final Approver still comes from the category or department override. Both configurable groups accept multiple members. Every member is notified when the stage becomes active; **any one member's approval or disapproval is the stage decision**. Approval records the actual signer and marks the other pending members as skipped. Disapproval ends the request and releases its pending balance. Next-stage members are notified only after the current stage completes.
+
+SL requires an eligible HR reviewer, a Recommending stage, and a final Approver, all excluding the filing employee. An incomplete route produces a setup error instead of bypassing a required stage. For legacy employee-specific SL routes, the last two eligible signatories become Recommending and Approver; earlier signatories form the optional Noted by group. Non-SL requests use the configured organizational route without HR Review. Use **Departments → Route preview → Sick Leave (SL)** to see exact stages and members for an employee before filing.
+
+## HR assessment and extensions
+
+HR employee users open **Pending Approvals**. SL requests at HR Review show **Extend SL**. Supply a later end date, an assessment reason, and any additional medical documents. Confirming an extension updates the current request, recalculates working days, reserves the additional balance, preserves existing documents and daily entries, and records the old and new dates and duration in the audit trail. Both the employee and current HR reviewers receive the updated dates. The request remains in HR Review.
+
+To complete review, use the approval button and explicitly choose **Fit to work** or **Additional rest required — leave dates extended**. The latter requires an extension recorded on this request. HR verifies the latest end date before signing; the approval then activates the configured next stage. For example, HR can extend a filed one-day SL while reviewing fitness to work, then send the extended dates to Noted by/Recommending/Approver for their decisions.
+
+Extensions are permitted only on an original SL request during its initial HR Review, by any current HR employee other than the filing employee. They are unavailable after HR has signed, after final approval, or while waiting for the employee's requested details. Additional rest discovered after SL approval requires a separate leave application; the existing cancellation/rescheduling controls remain limited to their currently supported leave types. Delegating HR review does not give a non-HR employee HR authority, and employees cannot decide their own requests. The same HR review and extension controls are available in the request detail's approval history as well as Pending Approvals.
+
+The existing SL policy still applies: maximum duration, overlapping requests, calendars, available balance, and medical-document rules. Extensions cannot cross the balance year and must add working days. Insufficient balance or a required certificate prevents saving; HR must resolve that condition first. Upload limits remain five attachments in total and 10 MB per file with the existing allowed file types. A new request for the next balance year is needed for cross-year rest.
+
+## Data and deployment
+
+The backend migration `AddGroupedSickLeaveReview20261001` adds nullable `StageOrder` and `StageKind` columns to `ApprovalSteps`. Individual rows retain their unique sequence and share a stage number for any-one approval. Existing rows have null stage metadata and continue their original sequential workflow. Department membership uses the existing `OrganizationalUnitApprovers` table. No existing approval histories or signatories are rewritten, including requests that have not yet been acted on. Automatic pending-route reconciliation now preserves request snapshots.
+
+Build and deploy the AutoID backend together with the OnlineFS frontend. Backend startup applies pending EF migrations using the existing startup mechanism. Restart the updated backend to activate the new endpoints and schema. The frontend alone cannot enable these server operations. Retain a database backup before deployment as part of the normal deployment process. HR finalization after organizational approval remains separate from the new initial fit-to-work review and optional departmental Noted by stage.
+
+Concurrent decisions update concurrency-protected request/step records inside transactions. An extension includes the end date the reviewer saw, and HR approval also compares that date, so a stale reviewer cannot silently sign or overwrite changed dates. Alternative stage members close together; only one decision can advance a stage.
+
+## Changed implementation files
+
+Frontend: `src/lib/api.ts`, `src/lib/tutorial.ts`, `src/types/notification.ts`, `src/pages/ApprovalsPage.tsx`, `src/pages/LeaveDetailPage.tsx`, `src/pages/MyRequestsPage.tsx`, `src/components/SickLeaveExtensionDialog.tsx`, `src/components/LeaveSummaryForm.tsx`, `src/pages/FileLeavePage.tsx`, `src/pages/DepartmentManagementPage.tsx`, `src/pages/DepartmentManagement/AddEditUnitModal.tsx`, `src/pages/DepartmentManagement/SetFirstApproverModal.tsx`, `src/pages/DepartmentManagement/ApproverMembersSelect.tsx`, `src/pages/DepartmentManagement/UnitDetailsPanel.tsx`. Documentation: this guide, README, architecture, and API documentation.
+
+Backend: `Models/ApprovalStep.cs`, `Domain/ApprovalWorkflow.cs`, `Data/AppDbContext.cs`, `Services/AccessCapabilities.cs`, `Services/ILeaveApprovalRoutingService.cs`, `Services/LeaveApprovalRoutingService.cs`, `Controllers/DepartmentController.cs`, `Controllers/ApprovalController.cs`, `Controllers/HRLeaveController.cs`, `Controllers/LeaveController.cs`, `Controllers/LeaveController.SickLeave.cs`, the new migration and its designer, and `Migrations/AppDbContextModelSnapshot.cs`.

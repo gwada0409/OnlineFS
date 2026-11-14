@@ -1,0 +1,13 @@
+# Get Started tutorial
+
+After signing in, users who have not dismissed or completed the tutorial for their account and current permissions see a welcome invitation above the page content. **Start tutorial** opens the walkthrough; **Maybe later** dismisses the invitation. **Get Started** in the header always starts the walkthrough again from the first step.
+
+**Get Started** launches the walkthrough for the current section. My Dashboard explains the summary cards, balances, and recent requests. File Leave explains the current application stage, including type, dates, reason, attachments, review, and continuation controls where rendered. My Requests explains status filtering, history, and eligible row actions. Notifications explains the current workspace, inbox filters, read status, and preferences. Other sections retain the role-aware navigation overview. Steps are filtered against mounted controls, including after lazy page loading, so hidden form stages are not highlighted. The tour never fills or submits a form or executes a highlighted action.
+
+Use **Next**, **Back**, **Skip tutorial**, or **Finish**. Choose an available sidebar section during a tour to navigate normally and restart at the first step of that section’s tour. On smaller screens, **Change section** opens the navigation menu. Keyboard users can Tab between tutorial controls and available navigation links, use Enter or Space to select, and press Escape to skip. Page controls remain inert during the tour; sidebar navigation stays available. Focus returns to the launcher after closing. The sidebar expands temporarily and opens for navigation steps; the original sidebar state is restored on exit. The card adapts to small screens and can scroll on short viewports.
+
+Discovery status is stored in browser local storage per account ID, permission set, and tutorial version. Clearing browser storage or using another browser presents the invitation again. Storage failures do not prevent starting or completing the walkthrough. Restarting remains available regardless of saved discovery status. No backend data or permissions are changed.
+
+When adding navigation, update `src/lib/tutorial.ts` to match actual route guards, labels, and screen behavior. The integration tests check that every step has a rendered target for employee, approver, HR staff, HR manager, administrator, system administrator, and restricted accounts.
+
+The instruction card stays beside the highlighted control with a small gap and follows it on scrolling or resizing. When horizontal space is limited, it uses the space above or below and stays within the viewport. Next and Back fade the card out and in; reduced-motion preferences switch steps immediately.

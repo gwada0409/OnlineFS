@@ -1,0 +1,40 @@
+/* Theme-aware custom calendar surfaces; event/status hues remain meaningful in either mode. */
+.calendar-hero { background: radial-gradient(circle at 76% 140%, var(--primary-light), transparent 42%), linear-gradient(120deg, color-mix(in srgb, var(--primary) 17%, var(--bg-secondary)), var(--bg-secondary) 72%); border-color: var(--border-active); }
+.calendar-hero h1 { color: var(--text-primary); }
+.calendar-hero p { color: var(--text-secondary); }
+.calendar-shell { background: var(--bg-card); border-color: var(--border); }
+.calendar-toolbar { border-color: var(--border); }
+.calendar-toolbar h2 { color: var(--text-primary); }
+.calendar-nav button, .calendar-view-switch button { border-color: var(--border); color: var(--text-secondary); background: var(--bg-secondary); }
+.calendar-nav button:hover, .calendar-view-switch button:not(:disabled):hover { border-color: var(--primary); color: var(--primary); }
+.calendar-view-switch { border-color: var(--border); background: var(--bg-primary); }
+.calendar-view-switch button.active { color: #fff; background: var(--primary); }
+.calendar-weekdays { color: var(--text-muted); }
+.calendar-day { border-color: var(--border); background: var(--bg-secondary); }
+.calendar-day-number { color: var(--text-primary); }
+.calendar-day.today { border-color: var(--primary); }
+.calendar-summary { border-color: var(--border); color: var(--text-secondary); }
+.calendar-summary strong { color: var(--text-primary); }
+.calendar-summary .working-day-total { border-color: var(--border-active); color: var(--text-secondary); background: var(--primary-light); }
+.calendar-summary .working-day-total strong { color: var(--primary); }
+:root[data-theme="light"] .calendar-event.holiday { color: #854d0e; background: #fef3c7; }
+:root[data-theme="light"] .calendar-event.holiday.working { color: #1e40af; background: #dbeafe; }
+:root[data-theme="light"] .calendar-event.leave { color: #6b21a8; background: #f3e8ff; }
+:root[data-theme="light"] .calendar-event.leave.approved { color: #115e59; background: #ccfbf1; }
+:root[data-theme="light"] .calendar-event.leave.sick { color: #1e40af; background: #dbeafe; }
+
+:root[data-theme="light"] .main-header { background-color: color-mix(in srgb, var(--bg-primary) 90%, transparent); }
+:root[data-theme="light"] .sidebar { box-shadow: var(--shadow-md); }
+
+:where(.app-layout, .sidebar, .main-content, .main-header, .page-header, .glass-card, .stat-card, .modal-content, .toast, .form-input, .form-select, .form-textarea, .data-table th, .data-table td, .calendar-shell, .calendar-day) {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 160ms;
+  transition-timing-function: ease;
+}
+
+@media (max-width: 480px) {
+  .theme-preference { min-width: 88px; width: 88px; font-size: 0.7rem; padding-left: 6px; padding-right: 24px; }
+  .main-header > div:first-child { min-width: 0; flex: 1; overflow: hidden; }
+  .main-header > div:first-child > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main-header > div:last-child { flex: 0 0 auto; gap: 8px; }
+}
